@@ -328,7 +328,7 @@ router.get("/tasks", authenticateToken, async (req, res) => {
   }
 });
 
-// 4. POST NEW TASK: บันทึกข้อมูลงานจากฟอร์ม
+// 4. POST NEW TASK: บันทึกข้อมูลงานจากฟอร์ม (เวอร์ชันจัดท่อสลับสาย ปิดบั๊กป๊อปอัพตัวแดง 🟢)
 router.post("/tasks", authenticateToken, async (req, res) => {
   const {
     category,
@@ -339,11 +339,12 @@ router.post("/tasks", authenticateToken, async (req, res) => {
     startTime,
     endTime,
     description,
-    bannerUrl, // 💡 รับค่า bannerUrl เพิ่มเข้ามา
+    bannerUrl,
   } = req.body;
   const userId = req.user.id;
 
   try {
+    // 🟢 สเต็ปที่ 1: สั่งบันทึกข้อมูลเข้า Supabase ออนไลน์ตัวจริง
     const result = await query(
       "INSERT INTO tasks (user_id, category, date, title, chairman, room, start_time, end_time, description, banner_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
       [
@@ -356,33 +357,46 @@ router.post("/tasks", authenticateToken, async (req, res) => {
         startTime,
         endTime,
         description,
-        bannerUrl || null, // 💡 ถ้าไม่มีให้เป็น null
+        bannerUrl || null,
       ],
     );
 
-    await lineClient.pushMessage({
-      to: TARGET_GROUP_ID,
-      messages: [
-        createFlexNotification(
-          category,
-          date,
-          title,
-          chairman,
-          room,
-          startTime,
-          endTime,
-          description,
-          bannerUrl, // 💡 ส่ง bannerUrl ไปให้ Flex Message
-        ),
-      ],
-    });
-
+    // 🟢 สเต็ปที่ 2: ทำการตอบกลับหาหน้าบ้านทันทีว่าสำเร็จ! (Next.js ได้รับตรงนี้ปุ๊บ จะเด้งป๊อปอัพสีเขียวหล่อ ๆ เลยครับ)
     res
       .status(201)
       .json({ message: "บันทึกกิจกรรมสำเร็จ", task: result.rows[0] });
+
+    // 🟢 สเต็ปที่ 3: แอบยิง LINE แจ้งเตือนเยื้องหลังแบบเงียบ ๆ (จับแยกห้องขังเพื่อไม่ให้มาขัดขวางป๊อปอัพหน้าเว็บ)
+    try {
+      await lineClient.pushMessage({
+        to: TARGET_GROUP_ID,
+        messages: [
+          createFlexNotification(
+            category,
+            date,
+            title,
+            chairman,
+            room,
+            startTime,
+            endTime,
+            description,
+            bannerUrl,
+          ),
+        ],
+      });
+    } catch (lineError) {
+      // ถ้ารหัสไลน์พังหรือติด 401 ให้พ่นบ่นแค่ใน Logs หลังบ้านพอ หน้าเว็บจริงจะไม่ระเบิดแล้วครับน้า
+      console.error(
+        "⚠️ LINE Notification failed but data was saved safely:",
+        lineError.message,
+      );
+    }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "ไม่สามารถบันทึกข้อมูลฟอร์มได้" });
+    // ป้องกันการยิงซ้ำถ้ามีการตอบกลับไปแล้ว
+    if (!res.headersSent) {
+      res.status(500).json({ message: "ไม่สามารถบันทึกข้อมูลฟอร์มได้" });
+    }
   }
 });
 
@@ -408,13 +422,19 @@ router.delete("/tasks/:id", authenticateToken, async (req, res) => {
     const deletedTaskTitle = checkTask.rows[0].title;
     await query("DELETE FROM tasks WHERE id = $1", [taskId]);
 
-    const deleteMessage = `❌ มีการยกเลิก/ลบกิจกรรม!\n📝 เรื่อง: ${deletedTaskTitle}\n👤 ลบโดย: ${userName} ${userRole === "admin" ? "(Admin)" : ""}`;
-    await lineClient.pushMessage({
-      to: TARGET_GROUP_ID,
-      messages: [{ type: "text", text: deleteMessage }],
-    });
-
+    // ตอบกลับหน้าบ้านทันทีเพื่อความเร็ว
     res.json({ message: "ลบกิจกรรมเรียบร้อยแล้ว" });
+
+    // แอบยิงไลน์ข้างหลัง
+    try {
+      const deleteMessage = `❌ มีการยกเลิก/ลบกิจกรรม!\n📝 เรื่อง: ${deletedTaskTitle}\n👤 ลบโดย: ${userName} ${userRole === "admin" ? "(Admin)" : ""}`;
+      await lineClient.pushMessage({
+        to: TARGET_GROUP_ID,
+        messages: [{ type: "text", text: deleteMessage }],
+      });
+    } catch (le) {
+      console.error("LINE delete log notify failed:", le.message);
+    }
   } catch (error) {
     res.status(500).json({ message: "เกิดข้อผิดพลาดในการลบ" });
   }
@@ -478,7 +498,6 @@ router.put("/tasks/:id", authenticateToken, async (req, res) => {
 // =========================================================
 
 // 👑 7. [ฟังก์ชันมอบหมายงาน] แอดมินสั่งเปลี่ยนตัวเจ้าของกิจกรรม
-// 👑 [ฉลุยตัวล่าสุด] แอดมินสั่งมอบหมายงาน พร้อมอัปเดตชื่อผู้รับผิดชอบ (chairman) อัตโนมัติ
 router.patch(
   "/admin/tasks/:id/assign",
   authenticateToken,
@@ -494,7 +513,6 @@ router.patch(
     }
 
     try {
-      // 1. ตรวจสอบกิจกรรมว่ามีอยู่จริงไหม
       const checkTask = await query("SELECT * FROM tasks WHERE id = $1", [
         taskId,
       ]);
@@ -504,7 +522,6 @@ router.patch(
           .json({ message: "ไม่พบกิจกรรมที่ต้องการมอบหมาย" });
       }
 
-      // 2. ดึงชื่อพนักงานคนใหม่จากฐานข้อมูลเพื่อเอามาใช้เปลี่ยนชื่อผู้รับผิดชอบ
       const checkUser = await query("SELECT name FROM users WHERE id = $1", [
         newUserId,
       ]);
@@ -514,27 +531,29 @@ router.patch(
           .json({ message: "ไม่พบรายชื่อพนักงานคนดังกล่าวในระบบ" });
       }
 
-      const targetUserName = checkUser.rows[0].name; // 💡 ชื่อพนักงานคนใหม่
+      const targetUserName = checkUser.rows[0].name;
       const oldTaskTitle = checkTask.rows[0].title;
 
-      // 3. 🎯 ยิง SQL อัปเดตเปลี่ยนทั้ง user_id และ คอลัมน์ chairman ให้เป็นชื่อคนใหม่ทันที!
       await query(
         `UPDATE tasks 
-       SET user_id = $1, chairman = $2 
-       WHERE id = $3`,
+         SET user_id = $1, chairman = $2 
+         WHERE id = $3`,
         [newUserId, targetUserName, taskId],
       );
-
-      // 4. ส่งแจ้งเตือนเข้ากลุ่ม LINE สรุปรายละเอียดแบบหล่อ ๆ
-      const assignMessage = `🎖️ แอดมินมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n👤 เปลี่ยนผู้รับผิดชอบเป็น: ${targetUserName}\n(ระบบย้ายงานเข้าแดชบอร์ดส่วนตัวเรียบร้อยแล้วครับ)`;
-      await lineClient.pushMessage({
-        to: TARGET_GROUP_ID,
-        messages: [{ type: "text", text: assignMessage }],
-      });
 
       res.json({
         message: `มอบหมายงานสำเร็จ! เปลี่ยนตัวผู้รับผิดชอบเป็นคุณ ${targetUserName} เรียบร้อยครับน้า`,
       });
+
+      try {
+        const assignMessage = `🎖️ แอดมินมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n👤 เปลี่ยนผู้รับผิดชอบเป็น: ${targetUserName}\n(ระบบย้ายงานเข้าแดชบอร์ดส่วนตัวเรียบร้อยแล้วครับ)`;
+        await lineClient.pushMessage({
+          to: TARGET_GROUP_ID,
+          messages: [{ type: "text", text: assignMessage }],
+        });
+      } catch (le) {
+        console.error("LINE assign notify failed:", le.message);
+      }
     } catch (error) {
       console.error("Admin assign and change chairman error:", error);
       res
@@ -576,7 +595,7 @@ router.delete(
 
 const { MessagingApiClient } = messagingApi;
 const lineClient = new MessagingApiClient({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "dummy_token",
 });
 
 router.post("/webhook", async (req, res) => {
