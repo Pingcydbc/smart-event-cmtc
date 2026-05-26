@@ -28,7 +28,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("events");
   const [loading, setLoading] = useState(true);
 
-  const API_URL = "http://localhost:5000";
+  const API_URL = "https://smart-event-backend-fua9.onrender.com";
 
   // 🔐 1. เช็กสิทธิ์แอดมินตั้งแต่ตอนโหลดหน้าเพจครั้งแรก
   useEffect(() => {
