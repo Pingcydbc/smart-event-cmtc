@@ -340,7 +340,7 @@ export default function DashboardPage() {
     calendarCells.push(
       <div
         key={`empty-${i}`}
-        className="min-h-[100px] border border-gray-50 bg-gray-50/20 rounded-xl"
+        className="min-h-25 border border-gray-50 bg-gray-50/20 rounded-xl"
       ></div>,
     );
   }
@@ -358,13 +358,13 @@ export default function DashboardPage() {
     calendarCells.push(
       <div
         key={`day-${day}`}
-        className="min-h-[100px] border border-gray-100 p-1.5 rounded-xl bg-white flex flex-col justify-between hover:border-gray-200 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.005)]"
+        className="min-h-25 border border-gray-100 p-1.5 rounded-xl bg-white flex flex-col justify-between hover:border-gray-200 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.005)]"
       >
         <span className="text-xs font-bold text-gray-400 ml-1 mt-0.5">
           {day}
         </span>
 
-        <div className="space-y-1 overflow-y-auto max-h-[75px] scrollbar-none mt-1 grow">
+        <div className="space-y-1 overflow-y-auto max-h-18.75 scrollbar-none mt-1 grow">
           {dayEvents.map((event: any) => (
             <div
               key={event.id}
