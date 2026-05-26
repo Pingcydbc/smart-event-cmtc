@@ -1,0 +1,612 @@
+import express from "express";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { query } from "../db.js";
+import { authenticateToken } from "../middleware/auth.js";
+// นำเข้าโมดูลเวอร์ชันใหม่ v9+
+import { messagingApi } from "@line/bot-sdk";
+
+const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey123";
+
+// รหัส Group ID ของคุณที่ดึงได้จาก Terminal
+const TARGET_GROUP_ID = "C31512452c1c75cde66ee035e2ee0e621";
+
+// ==========================================
+// 👑 Middleware ตรวจสอบสิทธิ์ว่าผู้ใช้รายนี้คือ Admin หรือไม่
+// ==========================================
+const isAdmin = (req, res, next) => {
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    return res
+      .status(403)
+      .json({ message: "ปฏิเสธการเข้าถึง: สำหรับผู้ดูแลระบบเท่านั้น" });
+  }
+};
+
+// ==========================================
+// 💡 ฟังก์ชันสร้างการ์ด Flex Message (ล้างบั๊ก marginTop เรียบร้อย)
+// ==========================================
+function createFlexNotification(
+  category,
+  date,
+  title,
+  chairman,
+  room,
+  startTime,
+  endTime,
+  description,
+  bannerUrl, // 💡 รับค่า bannerUrl เข้ามา
+) {
+  const timeDisplay =
+    startTime && endTime ? `${startTime} - ${endTime} น.` : "ไม่ได้ระบุเวลา";
+
+  // 💡 สร้างโครงสร้าง Flex Message พื้นฐาน
+  const flexContents = {
+    type: "bubble",
+    size: "giga",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#4682B4",
+      contents: [
+        {
+          type: "text",
+          text: "📢 แจ้งเตือนกิจกรรมใหม่",
+          weight: "bold",
+          color: "#FFFFFF",
+          size: "md",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "xl",
+          wrap: true,
+          color: "#111111",
+        },
+        { type: "separator", color: "#EEEEEE" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                {
+                  type: "text",
+                  text: "📁 ประเภท",
+                  size: "sm",
+                  color: "#AAAAAA",
+                  flex: 2,
+                },
+                {
+                  type: "text",
+                  text: category,
+                  size: "sm",
+                  color: "#333333",
+                  flex: 5,
+                  wrap: true,
+                },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                {
+                  type: "text",
+                  text: "📅 วันที่",
+                  size: "sm",
+                  color: "#AAAAAA",
+                  flex: 2,
+                },
+                {
+                  type: "text",
+                  text: date,
+                  size: "sm",
+                  color: "#333333",
+                  flex: 5,
+                  wrap: true,
+                },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                {
+                  type: "text",
+                  text: "⏱️ เวลา",
+                  size: "sm",
+                  color: "#AAAAAA",
+                  flex: 2,
+                },
+                {
+                  type: "text",
+                  text: timeDisplay,
+                  size: "sm",
+                  color: "#DC2626",
+                  weight: "bold",
+                  flex: 5,
+                  wrap: true,
+                },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                {
+                  type: "text",
+                  text: "👤 ผู้รับผิดชอบ",
+                  size: "sm",
+                  color: "#AAAAAA",
+                  flex: 2,
+                },
+                {
+                  type: "text",
+                  text: chairman,
+                  size: "sm",
+                  color: "#333333",
+                  flex: 5,
+                  wrap: true,
+                },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                {
+                  type: "text",
+                  text: "🚪 สถานที่",
+                  size: "sm",
+                  color: "#AAAAAA",
+                  flex: 2,
+                },
+                {
+                  type: "text",
+                  text: room,
+                  size: "sm",
+                  color: "#333333",
+                  flex: 5,
+                  wrap: true,
+                },
+              ],
+            },
+            {
+              type: "box",
+              layout: "vertical",
+              backgroundColor: "#F9FAFB",
+              paddingAll: "md",
+              cornerRadius: "md",
+              margin: "md",
+              contents: [
+                {
+                  type: "text",
+                  text: "📝 รายละเอียด/สิ่งที่ต้องทำ:",
+                  size: "xs",
+                  color: "#888888",
+                  weight: "bold",
+                },
+                {
+                  type: "text",
+                  text: description || "ไม่มีรายละเอียดเพิ่มเติม",
+                  size: "sm",
+                  color: "#444444",
+                  wrap: true,
+                  margin: "xs",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  // 💡 ถ้ามีการใส่ bannerUrl ให้เพิ่มส่วน hero เข้าไปในการ์ด Flex
+  if (bannerUrl) {
+    flexContents.hero = {
+      type: "image",
+      url: bannerUrl,
+      size: "full",
+      aspectRatio: "20:13",
+      aspectMode: "cover",
+    };
+  }
+
+  return {
+    type: "flex",
+    altText: `📌 มีกิจกรรมใหม่: ${title}`,
+    contents: flexContents,
+  };
+}
+
+// 1. REGISTER: สมัครสมาชิก
+router.post("/auth/register", async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!password || password.length < 6) {
+    return res
+      .status(400)
+      .json({ message: "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษรขึ้นไป" });
+  }
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await query(
+      "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, 'user_n') RETURNING id, name, email, role",
+      [name, email, hashedPassword],
+    );
+    res
+      .status(201)
+      .json({ message: "สมัครสมาชิกสำเร็จ", user: result.rows[0] });
+  } catch (error) {
+    res
+      .status(400)
+      .json({ message: "อีเมลนี้ถูกใช้งานแล้ว หรือข้อมูลไม่ถูกต้อง" });
+  }
+});
+
+// 2. LOGIN: เข้าสู่ระบบ
+router.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await query("SELECT * FROM users WHERE email = $1", [email]);
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: "ไม่พบผู้ใช้งานนี้ในระบบ" });
+    }
+    const user = result.rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: "รหัสผ่านไม่ถูกต้อง" });
+    }
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role || "user_n",
+      },
+      JWT_SECRET,
+      { expiresIn: "1d" },
+    );
+    res.json({
+      message: "เข้าสู่ระบบสำเร็จ",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role || "user_n",
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: "เกิดข้อผิดพลาดที่ระบบหลังบ้าน" });
+  }
+});
+
+// 3. GET ALL TASKS: ดึงข้อมูลงานทั้งหมดขึ้นแดชบอร์ด (แยกตาม 4 Roles)
+router.get("/tasks", authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  try {
+    let result;
+    if (userRole === "admin" || userRole === "user_pr") {
+      result = await query(`
+        SELECT tasks.*, users.name as creator_name 
+        FROM tasks 
+        JOIN users ON tasks.user_id = users.id 
+        ORDER BY tasks.created_at DESC
+      `);
+    } else {
+      result = await query(
+        `
+        SELECT tasks.*, users.name as creator_name 
+        FROM tasks 
+        JOIN users ON tasks.user_id = users.id 
+        WHERE tasks.user_id = $1
+        ORDER BY tasks.created_at DESC
+      `,
+        [userId],
+      );
+    }
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: "ไม่สามารถดึงข้อมูลแดชบอร์ดได้" });
+  }
+});
+
+// 4. POST NEW TASK: บันทึกข้อมูลงานจากฟอร์ม
+router.post("/tasks", authenticateToken, async (req, res) => {
+  const {
+    category,
+    date,
+    title,
+    chairman,
+    room,
+    startTime,
+    endTime,
+    description,
+    bannerUrl, // 💡 รับค่า bannerUrl เพิ่มเข้ามา
+  } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const result = await query(
+      "INSERT INTO tasks (user_id, category, date, title, chairman, room, start_time, end_time, description, banner_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+      [
+        userId,
+        category,
+        date,
+        title,
+        chairman,
+        room,
+        startTime,
+        endTime,
+        description,
+        bannerUrl || null, // 💡 ถ้าไม่มีให้เป็น null
+      ],
+    );
+
+    await lineClient.pushMessage({
+      to: TARGET_GROUP_ID,
+      messages: [
+        createFlexNotification(
+          category,
+          date,
+          title,
+          chairman,
+          room,
+          startTime,
+          endTime,
+          description,
+          bannerUrl, // 💡 ส่ง bannerUrl ไปให้ Flex Message
+        ),
+      ],
+    });
+
+    res
+      .status(201)
+      .json({ message: "บันทึกกิจกรรมสำเร็จ", task: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "ไม่สามารถบันทึกข้อมูลฟอร์มได้" });
+  }
+});
+
+// 5. API สำหรับลบกิจกรรม
+router.delete("/tasks/:id", authenticateToken, async (req, res) => {
+  const taskId = req.params.id;
+  const userId = req.user.id;
+  const userName = req.user.name;
+  const userRole = req.user.role;
+
+  try {
+    const checkTask = await query("SELECT * FROM tasks WHERE id = $1", [
+      taskId,
+    ]);
+    if (checkTask.rows.length === 0)
+      return res.status(404).json({ message: "ไม่พบกิจกรรม" });
+    if (checkTask.rows[0].user_id !== userId && userRole !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "คุณไม่มีสิทธิ์ลบกิจกรรมของผู้อื่น" });
+    }
+
+    const deletedTaskTitle = checkTask.rows[0].title;
+    await query("DELETE FROM tasks WHERE id = $1", [taskId]);
+
+    const deleteMessage = `❌ มีการยกเลิก/ลบกิจกรรม!\n📝 เรื่อง: ${deletedTaskTitle}\n👤 ลบโดย: ${userName} ${userRole === "admin" ? "(Admin)" : ""}`;
+    await lineClient.pushMessage({
+      to: TARGET_GROUP_ID,
+      messages: [{ type: "text", text: deleteMessage }],
+    });
+
+    res.json({ message: "ลบกิจกรรมเรียบร้อยแล้ว" });
+  } catch (error) {
+    res.status(500).json({ message: "เกิดข้อผิดพลาดในการลบ" });
+  }
+});
+
+// 6. API สำหรับแก้ไขงาน
+router.put("/tasks/:id", authenticateToken, async (req, res) => {
+  const taskId = req.params.id;
+  const userId = req.user.id;
+  const userRole = req.user.role;
+  const {
+    category,
+    date,
+    title,
+    chairman,
+    room,
+    startTime,
+    endTime,
+    description,
+  } = req.body;
+
+  try {
+    const checkTask = await query("SELECT * FROM tasks WHERE id = $1", [
+      taskId,
+    ]);
+    if (checkTask.rows.length === 0)
+      return res.status(404).json({ message: "ไม่พบกิจกรรมที่ต้องการแก้ไข" });
+    if (checkTask.rows[0].user_id !== userId && userRole !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "คุณไม่มีสิทธิ์แก้ไขกิจกรรมของผู้อื่น" });
+    }
+
+    const result = await query(
+      `UPDATE tasks 
+       SET category = $1, date = $2, title = $3, chairman = $4, room = $5, start_time = $6, end_time = $7, description = $8
+       WHERE id = $9 RETURNING *`,
+      [
+        category,
+        date,
+        title,
+        chairman,
+        room,
+        startTime,
+        endTime,
+        description,
+        taskId,
+      ],
+    );
+
+    res.json({ message: "อัปเดตข้อมูลสำเร็จ", task: result.rows[0] });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "เกิดข้อผิดพลาดหลังบ้าน ไม่สามารถอัปเดตได้" });
+  }
+});
+
+// =========================================================
+// 👑 ADMIN ONLY API ROUTES
+// =========================================================
+
+// 👑 7. [ฟังก์ชันมอบหมายงาน] แอดมินสั่งเปลี่ยนตัวเจ้าของกิจกรรม
+// 👑 [ฉลุยตัวล่าสุด] แอดมินสั่งมอบหมายงาน พร้อมอัปเดตชื่อผู้รับผิดชอบ (chairman) อัตโนมัติ
+router.patch(
+  "/admin/tasks/:id/assign",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    const taskId = req.params.id;
+    const { newUserId } = req.body;
+
+    if (!newUserId) {
+      return res
+        .status(400)
+        .json({ message: "กรุณาระบุรายชื่อสมาชิกที่จะรับมอบหมายงานครับน้า" });
+    }
+
+    try {
+      // 1. ตรวจสอบกิจกรรมว่ามีอยู่จริงไหม
+      const checkTask = await query("SELECT * FROM tasks WHERE id = $1", [
+        taskId,
+      ]);
+      if (checkTask.rows.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "ไม่พบกิจกรรมที่ต้องการมอบหมาย" });
+      }
+
+      // 2. ดึงชื่อพนักงานคนใหม่จากฐานข้อมูลเพื่อเอามาใช้เปลี่ยนชื่อผู้รับผิดชอบ
+      const checkUser = await query("SELECT name FROM users WHERE id = $1", [
+        newUserId,
+      ]);
+      if (checkUser.rows.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "ไม่พบรายชื่อพนักงานคนดังกล่าวในระบบ" });
+      }
+
+      const targetUserName = checkUser.rows[0].name; // 💡 ชื่อพนักงานคนใหม่
+      const oldTaskTitle = checkTask.rows[0].title;
+
+      // 3. 🎯 ยิง SQL อัปเดตเปลี่ยนทั้ง user_id และ คอลัมน์ chairman ให้เป็นชื่อคนใหม่ทันที!
+      await query(
+        `UPDATE tasks 
+       SET user_id = $1, chairman = $2 
+       WHERE id = $3`,
+        [newUserId, targetUserName, taskId],
+      );
+
+      // 4. ส่งแจ้งเตือนเข้ากลุ่ม LINE สรุปรายละเอียดแบบหล่อ ๆ
+      const assignMessage = `🎖️ แอดมินมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n👤 เปลี่ยนผู้รับผิดชอบเป็น: ${targetUserName}\n(ระบบย้ายงานเข้าแดชบอร์ดส่วนตัวเรียบร้อยแล้วครับ)`;
+      await lineClient.pushMessage({
+        to: TARGET_GROUP_ID,
+        messages: [{ type: "text", text: assignMessage }],
+      });
+
+      res.json({
+        message: `มอบหมายงานสำเร็จ! เปลี่ยนตัวผู้รับผิดชอบเป็นคุณ ${targetUserName} เรียบร้อยครับน้า`,
+      });
+    } catch (error) {
+      console.error("Admin assign and change chairman error:", error);
+      res
+        .status(500)
+        .json({ message: "เกิดข้อผิดพลาดหลังบ้าน ไม่สามารถมอบหมายงานได้" });
+    }
+  },
+);
+
+// ดึงข้อมูลสมาชิกทั้งหมด (Admin เท่านั้น)
+router.get("/admin/users", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await query(
+      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: "ดึงข้อมูลสมาชิกไม่สำเร็จ" });
+  }
+});
+
+// ลบสมาชิกออกจากระบบ (Admin เท่านั้น)
+router.delete(
+  "/admin/users/:id",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    const { id } = req.params;
+    try {
+      if (parseInt(id) === req.user.id)
+        return res.status(400).json({ message: "ลบไอดีตัวเองไม่ได้ครับน้า" });
+      await query("DELETE FROM users WHERE id = $1", [id]);
+      res.json({ message: "ลบสมาชิกสำเร็จ" });
+    } catch (error) {
+      res.status(500).json({ message: "เกิดข้อผิดพลาดในการลบ" });
+    }
+  },
+);
+
+const { MessagingApiClient } = messagingApi;
+const lineClient = new MessagingApiClient({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+});
+
+router.post("/webhook", async (req, res) => {
+  try {
+    const events = req.body.events;
+    if (!events || events.length === 0)
+      return res.status(200).json({ status: "ok" });
+    for (let event of events) {
+      if (
+        event.type === "message" &&
+        event.source &&
+        event.source.type === "group"
+      ) {
+        const groupId = event.source.groupId;
+        const userMessage =
+          event.message && event.message.text ? event.message.text : "";
+        if (userMessage.trim().toLowerCase() === "id") {
+          await lineClient.replyMessage({
+            replyToken: event.replyToken,
+            messages: [
+              { type: "text", text: `ID กลุ่มของคุณคือ:\n${groupId}` },
+            ],
+          });
+        }
+      }
+    }
+    return res.status(200).json({ status: "ok" });
+  } catch (error) {
+    return res.status(200).json({ status: "error_handled" });
+  }
+});
+
+export default router;
