@@ -1,25 +1,30 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Swal from 'sweetalert2';
+import Swal from "sweetalert2";
 
-// 💡 ปรับชื่อฟังก์ชันหลักเป็น Page เพื่อให้ Next.js จำเป็นหน้าแรกสุดของ Root ครับน้า
 export default function Page() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://smart-event-backend-fua9.onrender.com";
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://smart-event-backend-fua9.onrender.com";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isLogin && formData.password.length < 6) {
       Swal.fire({
-        icon: 'error',
-        title: 'สมัครสมาชิกไม่สำเร็จ',
-        text: 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษรขึ้นไป',
-        confirmButtonColor: '#dc2626', // สีแดง CMTC
+        icon: "error",
+        title: "สมัครสมาชิกไม่สำเร็จ",
+        text: "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษรขึ้นไป",
+        confirmButtonColor: "#dc2626", // สีแดง CMTC
       });
       return;
     }
@@ -39,10 +44,10 @@ export default function Page() {
       if (isLogin) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
-        
+
         Swal.fire({
-          icon: 'success',
-          title: 'เข้าสู่ระบบสำเร็จ',
+          icon: "success",
+          title: "เข้าสู่ระบบสำเร็จ",
           text: `ยินดีต้อนรับคุณ ${data.user.name}`,
           timer: 1500,
           showConfirmButton: false,
@@ -51,20 +56,20 @@ export default function Page() {
         });
       } else {
         Swal.fire({
-          icon: 'success',
-          title: 'สมัครสมาชิกสำเร็จ!',
-          text: 'กรุณาเข้าสู่ระบบด้วยบัญชีใหม่ของคุณ',
-          confirmButtonColor: '#dc2626',
+          icon: "success",
+          title: "สมัครสมาชิกสำเร็จ!",
+          text: "กรุณาเข้าสู่ระบบด้วยบัญชีใหม่ของคุณ",
+          confirmButtonColor: "#dc2626",
         });
         setFormData({ name: "", email: "", password: "" });
         setIsLogin(true);
       }
     } catch (err: any) {
       Swal.fire({
-        icon: 'error',
-        title: 'เกิดข้อผิดพลาด',
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
         text: err.message,
-        confirmButtonColor: '#dc2626',
+        confirmButtonColor: "#dc2626",
       });
     }
   };
@@ -73,7 +78,9 @@ export default function Page() {
     <div className="flex items-center justify-center min-h-screen bg-white p-4">
       <div className="w-full max-w-md p-8 bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all duration-300">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold tracking-tight text-red-600">Smart Event CMTC</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-red-600">
+            Smart Event CMTC
+          </h2>
           <p className="text-sm text-gray-400 mt-1">
             {isLogin ? "เข้าสู่ระบบเพื่อจัดการกิจกรรม" : "สร้างบัญชีผู้ใช้ใหม่"}
           </p>
@@ -82,28 +89,38 @@ export default function Page() {
         <form onSubmit={handleSubmit} className="space-y-5">
           {!isLogin && (
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                ชื่อ-นามสกุล
+              </label>
               <input
                 type="text"
                 required
                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-red-500 text-gray-900 transition-all duration-200"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
               />
             </div>
           )}
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">อีเมล</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              อีเมล
+            </label>
             <input
               type="email"
               required
               className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-red-500 text-gray-900 transition-all duration-200"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">รหัสผ่าน</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              รหัสผ่าน
+            </label>
             <input
               type="password"
               required
@@ -111,7 +128,9 @@ export default function Page() {
               placeholder="รหัสผ่านอย่างน้อย 6 ตัว"
               className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-red-500 text-gray-900 transition-all duration-200"
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
             />
           </div>
           <button
@@ -125,7 +144,10 @@ export default function Page() {
         <div className="mt-6 pt-6 border-t border-gray-100 text-center">
           <p className="text-sm text-gray-500">
             {isLogin ? "ยังไม่มีบัญชีผู้ใช้?" : "มีบัญชีผู้ใช้อยู่แล้ว?"}
-            <button onClick={() => setIsLogin(!isLogin)} className="ml-1.5 text-red-600 font-bold hover:underline">
+            <button
+              onClick={() => setIsLogin(!isLogin)}
+              className="ml-1.5 text-red-600 font-bold hover:underline"
+            >
               {isLogin ? "สมัครสมาชิก" : "เข้าสู่ระบบที่นี่"}
             </button>
           </p>
