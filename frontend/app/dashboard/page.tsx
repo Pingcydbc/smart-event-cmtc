@@ -467,7 +467,7 @@ export default function DashboardPage() {
                           src={event.banner_url}
                           alt="Event Banner"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onerror="this.parentElement.style.display='none'"
+                          onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
                         />
                       </div>
                     )}
