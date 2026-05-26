@@ -3,12 +3,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Swal from 'sweetalert2';
 
-export default function AuthPage() {
+// 💡 ปรับชื่อฟังก์ชันหลักเป็น Page เพื่อให้ Next.js จำเป็นหน้าแรกสุดของ Root ครับน้า
+export default function Page() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://smart-event-backend-fua9.onrender.com";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +73,6 @@ export default function AuthPage() {
     <div className="flex items-center justify-center min-h-screen bg-white p-4">
       <div className="w-full max-w-md p-8 bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all duration-300">
         <div className="text-center mb-8">
-          {/* 🔴 ไฮไลต์ชื่อระบบด้วยสีแดงเทคนิคเชียงใหม่ */}
           <h2 className="text-2xl font-bold tracking-tight text-red-600">Smart Event CMTC</h2>
           <p className="text-sm text-gray-400 mt-1">
             {isLogin ? "เข้าสู่ระบบเพื่อจัดการกิจกรรม" : "สร้างบัญชีผู้ใช้ใหม่"}
@@ -114,7 +114,6 @@ export default function AuthPage() {
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             />
           </div>
-          {/* 🔴 ปุ่มกดสีขาวขอบแดง เปลี่ยนเป็นสีแดงเมื่อเมาส์ชี้ */}
           <button
             type="submit"
             className="w-full py-3 px-4 bg-white hover:bg-red-600 border border-red-600 text-red-600 hover:text-white font-medium rounded-xl transition-all duration-300 active:scale-[0.99] mt-2"
@@ -135,5 +134,3 @@ export default function AuthPage() {
     </div>
   );
 }
-
-//C31512452c1c75cde66ee035e2ee0e621
