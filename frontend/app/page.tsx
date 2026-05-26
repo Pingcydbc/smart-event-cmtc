@@ -7,14 +7,14 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // สั่งให้ระบบดีดหน้าจอไปที่หน้า /login ทันทีที่เปิดเว็บเข้ามาครับน้า
-    router.replace('/login');
+    // 💡 ปรับให้เด้งตรงเข้าหน้าแผงควบคุมแดชบอร์ดหลักที่มีปฏิทินงานทันทีครับน้า
+    router.replace('/dashboard');
   }, [router]);
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
       <div className="text-center">
-        <p className="text-sm text-slate-500 animate-pulse">กำลังนำคุณเข้าสู่ระบบ Smart Event...</p>
+        <p className="text-sm text-slate-500 animate-pulse">กำลังนำคุณเข้าสู่ระบบ Smart Event CMTC...</p>
       </div>
     </div>
   );
