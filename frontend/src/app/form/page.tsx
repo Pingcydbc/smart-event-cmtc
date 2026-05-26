@@ -34,7 +34,7 @@ export default function FormPage() {
   const [endTime, setEndTime] = useState("11:30");
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(false);
-  const API_URL = "http://localhost:5000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
   useEffect(() => {
     const token = localStorage.getItem("token");

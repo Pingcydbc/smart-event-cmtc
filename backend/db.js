@@ -2,13 +2,13 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-// กำหนดค่าการเชื่อมต่อแยกเป็นส่วนๆ เพื่อความแม่นยำสูงใน Docker Container
+// 💡 ปรับปรุงให้รองรับการเชื่อมต่อผ่าน DATABASE_URL (สำหรับ Supabase/Render)
+// และเปิดใช้งาน SSL เพื่อความปลอดภัยในการเชื่อมต่อ Cloud
 const pool = new Pool({
-  user: 'myuser',
-  host: 'postgres_db',       // ชื่อเซิร์ฟเวอร์อิงตามชื่อ container ใน docker-compose
-  database: 'mydatabase',
-  password: 'mypassword',
-  port: 5432,               // พอร์ตภายในตู้ Docker (หลังบ้านคุยกันเองใช้ 5432)
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 pool.on('connect', () => {

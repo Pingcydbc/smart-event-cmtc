@@ -36,7 +36,7 @@ export default function DashboardPage() {
   // สเตทสำหรับปฏิทินคำนวณวันเวลา (เริ่มต้นที่เดือนและปีปัจจุบัน)
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const API_URL = "http://localhost:5000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
   useEffect(() => {
     const token = localStorage.getItem("token");
