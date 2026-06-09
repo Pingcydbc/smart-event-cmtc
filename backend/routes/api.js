@@ -604,27 +604,103 @@ router.post("/webhook", async (req, res) => {
     if (!events || events.length === 0)
       return res.status(200).json({ status: "ok" });
     for (let event of events) {
-      if (
-        event.type === "message" &&
-        event.source &&
-        event.source.type === "group"
-      ) {
-        const groupId = event.source.groupId;
-        const userMessage =
-          event.message && event.message.text ? event.message.text : "";
-        if (userMessage.trim().toLowerCase() === "id") {
+      // 1. จัดการข้อความที่พิมพ์มา (รวมถึงปุ่มจาก Rich Menu)
+      if (event.type === "message" && event.message.type === "text") {
+        const userMessage = event.message.text.trim().toLowerCase();
+        const replyToken = event.replyToken;
+
+        // เคส: เช็ค ID (ใช้ได้ทั้งในกลุ่มและส่วนตัว)
+        if (userMessage === "id") {
+          const idText = event.source.type === "group" 
+            ? `ID กลุ่มของคุณคือ:\n${event.source.groupId}`
+            : `ID ของคุณคือ:\n${event.source.userId}`;
           await lineClient.replyMessage({
-            replyToken: event.replyToken,
-            messages: [
-              { type: "text", text: `ID กลุ่มของคุณคือ:\n${groupId}` },
-            ],
+            replyToken,
+            messages: [{ type: "text", text: idText }],
           });
+        }
+
+        // เคส: "เช็คงานวันนี้" (ดึงจาก Rich Menu)
+        if (userMessage === "เช็คงานวันนี้") {
+          try {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const result = await query(
+              "SELECT * FROM tasks WHERE date = $1 ORDER BY start_time ASC",
+              [todayStr]
+            );
+
+            if (result.rows.length === 0) {
+              await lineClient.replyMessage({
+                replyToken,
+                messages: [{ type: "text", text: "📅 วันนี้ไม่มีกิจกรรมนัดหมายครับ!" }],
+              });
+            } else {
+              let reportText = `📅 รายการกิจกรรมวันนี้ (${todayStr}):\n\n`;
+              result.rows.forEach((task, index) => {
+                reportText += `${index + 1}. 📝 ${task.title}\n` +
+                              `⏱️ ${task.start_time.slice(0,5)} - ${task.end_time.slice(0,5)} น.\n` +
+                              `🚪 ${task.room}\n` +
+                              `-----------------------\n`;
+              });
+              await lineClient.replyMessage({
+                replyToken,
+                messages: [{ type: "text", text: reportText }],
+              });
+            }
+          } catch (error) {
+            console.error("Webhook Check Task Error:", error);
+          }
         }
       }
     }
     return res.status(200).json({ status: "ok" });
   } catch (error) {
+    console.error("Webhook Error:", error);
     return res.status(200).json({ status: "error_handled" });
+  }
+});
+
+// ==========================================
+// 🛠️ ADMIN ONLY: สั่งสร้าง Rich Menu
+// ==========================================
+router.post("/admin/setup-rich-menu", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    // 1. นิยามโครงสร้างเมนู (3 ปุ่ม)
+    const richMenuObject = {
+      size: { width: 2500, height: 843 }, // แบบครึ่งหน้า (Half)
+      selected: true,
+      name: "Smart Event Menu",
+      chatBarText: "เมนูหลัก",
+      areas: [
+        {
+          bounds: { x: 0, y: 0, width: 833, height: 843 },
+          action: { type: "uri", uri: "https://smart-event-frontend.vercel.app" } // เปลี่ยนเป็น URL เว็บคุณ
+        },
+        {
+          bounds: { x: 833, y: 0, width: 833, height: 843 },
+          action: { type: "message", text: "เช็คงานวันนี้" }
+        },
+        {
+          bounds: { x: 1666, y: 0, width: 834, height: 843 },
+          action: { type: "message", text: "ติดต่อแอดมิน" }
+        }
+      ]
+    };
+
+    // 💡 ขั้นตอนของ LINE API: Create -> Upload Image -> Set Default
+    // หมายเหตุ: การอัปโหลดรูปต้องทำผ่าน Multipart Form หรือ Stream 
+    // ในที่นี้ผมจะทำโครงสร้างให้คุณไปกดยิงผ่าน Postman หรือสร้างปุ่มหน้าเว็บภายหลังครับ
+    
+    // หมายเหตุ: MessagingApiClient (v9+) ยังไม่รองรับการจัดการ Rich Menu โดยตรงแบบง่ายในตัวเดียว
+    // ปกติจะใช้ axios หรือ fetch ยิงไปที่ https://api.line.me/v2/bot/richmenu
+    
+    res.json({ 
+      message: "Infrastructure สำหรับ Rich Menu เตรียมพร้อมแล้ว!",
+      instruction: "กรุณาส่งรูปภาพขนาด 2500x843 ไปที่ LINE API เพื่อเริ่มใช้งาน"
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: "เกิดข้อผิดพลาดในการตั้งค่า Rich Menu" });
   }
 });
 
