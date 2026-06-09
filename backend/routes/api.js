@@ -651,6 +651,33 @@ router.post("/webhook", async (req, res) => {
             console.error("Webhook Check Task Error:", error);
           }
         }
+
+        // 🆕 เคส: "ติดต่อแอดมิน" (ส่งทั้งหา User และเข้ากลุ่ม Admin)
+        if (userMessage === "ติดต่อแอดมิน") {
+          try {
+            const userId = event.source.userId;
+            
+            // 1. ตอบกลับหา User (แบบที่ 1)
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{ 
+                type: "text", 
+                text: "📨 รับเรื่องเรียบร้อยครับ! ผมได้แจ้งเตือนเจ้าหน้าที่ให้ทราบแล้ว\n\nหากมีรายละเอียดเพิ่มเติมหรือต้องการแนบรูปภาพ สามารถพิมพ์ทิ้งไว้ได้เลยครับ เจ้าหน้าที่จะรีบมาตอบกลับผ่านแชทนี้โดยเร็วที่สุดครับ" 
+              }],
+            });
+
+            // 2. ส่งแจ้งเตือนเข้ากลุ่ม Admin (แบบที่ 2)
+            await lineClient.pushMessage({
+              to: TARGET_GROUP_ID,
+              messages: [{ 
+                type: "text", 
+                text: `⚠️ แจ้งเตือน: มีสมาชิกต้องการติดต่อแอดมิน!\n👤 User ID: ${userId}\n\n(แอดมินสามารถตอบกลับผ่านหน้าเว็บ Manager หรือระบบแชทได้เลยครับ)` 
+              }],
+            });
+          } catch (error) {
+            console.error("Contact Admin Notification Error:", error);
+          }
+        }
       }
     }
     return res.status(200).json({ status: "ok" });
