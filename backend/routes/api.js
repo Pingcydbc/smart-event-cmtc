@@ -635,16 +635,34 @@ router.post("/webhook", async (req, res) => {
                 messages: [{ type: "text", text: "📅 วันนี้ไม่มีกิจกรรมนัดหมายครับ!" }],
               });
             } else {
-              let reportText = `📅 รายการกิจกรรมวันนี้ (${todayStr}):\n\n`;
-              result.rows.forEach((task, index) => {
-                reportText += `${index + 1}. 📝 ${task.title}\n` +
-                              `⏱️ ${task.start_time.slice(0,5)} - ${task.end_time.slice(0,5)} น.\n` +
-                              `🚪 ${task.room}\n` +
-                              `-----------------------\n`;
+              // 🎨 สร้าง Flex Message สำหรับแต่ละกิจกรรม
+              const bubbles = result.rows.map(task => {
+                const flex = createFlexNotification(
+                  task.category,
+                  task.date.toISOString().split('T')[0],
+                  task.title,
+                  task.chairman,
+                  task.room,
+                  task.start_time.slice(0, 5),
+                  task.end_time.slice(0, 5),
+                  task.description,
+                  task.banner_url
+                );
+                return flex.contents; // ดึงเฉพาะส่วน contents (bubble)
               });
+
+              // ส่งแบบ Carousel ถ้ามีหลายงาน หรือ Bubble เดียวถ้ามีงานเดียว
               await lineClient.replyMessage({
                 replyToken,
-                messages: [{ type: "text", text: reportText }],
+                messages: [
+                  {
+                    type: "flex",
+                    altText: `📅 รายการกิจกรรมวันนี้ (${todayStr})`,
+                    contents: bubbles.length > 1 
+                      ? { type: "carousel", contents: bubbles }
+                      : bubbles[0]
+                  }
+                ],
               });
             }
           } catch (error) {
