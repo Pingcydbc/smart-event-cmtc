@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState("");
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState("");
+  const [lineUserId, setLineUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // สเตทสำหรับระบบสลับมุมมอง (list = แบบการ์ดเดิม, calendar = แบบปฏิทินใหม่)
@@ -52,7 +53,22 @@ export default function DashboardPage() {
     setCurrentUserId(user.id);
     setCurrentUserRole(user.role || "user_n");
     fetchEvents(token);
+    fetchProfile(token);
   }, [router]);
+
+  const fetchProfile = async (token: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLineUserId(data.line_user_id);
+      }
+    } catch (err) {
+      console.error("Fetch profile error:", err);
+    }
+  };
 
   const fetchEvents = async (token: string) => {
     try {
@@ -73,6 +89,85 @@ export default function DashboardPage() {
   const handleLogout = () => {
     localStorage.clear();
     router.push("/");
+  };
+
+  // 🔗 ฟังก์ชันเชื่อมต่อไลน์ส่วนตัว
+  const handleLinkLine = () => {
+    const token = localStorage.getItem("token");
+
+    Swal.fire({
+      title: "🔗 เชื่อมต่อ LINE ส่วนตัว",
+      html: `
+        <div class="text-left space-y-3 pt-3 text-sm bg-white">
+          <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs text-gray-600">
+            <strong>📋 ขั้นตอนการรับรหัส LINE User ID:</strong>
+            <ol class="list-decimal list-inside mt-1.5 space-y-1">
+              <li>แอดไลน์ Official Account ของระบบเป็นเพื่อน</li>
+              <li>พิมพ์ส่งข้อความคำว่า <span class="font-bold text-red-600 font-mono">id</span> ในแชทไลน์</li>
+              <li>คัดลอกรหัสประจำตัว (ขึ้นต้นด้วยตัว U) มาวางด้านล่างนี้</li>
+            </ol>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">วางรหัส LINE User ID ของคุณ</label>
+            <input id="swal-line-id" type="text" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500 font-mono" placeholder="U1234567890abcdef..." defaultValue="${lineUserId || ""}">
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: "#10b981",
+      cancelButtonColor: "#4b5563",
+      confirmButtonText: "เชื่อมต่อบัญชี",
+      cancelButtonText: "ยกเลิก",
+      customClass: {
+        popup: "rounded-2xl",
+        cancelButton:
+          "border border-gray-200 text-gray-700 font-medium px-4 py-2",
+      },
+      preConfirm: () => {
+        const idVal = (document.getElementById("swal-line-id") as HTMLInputElement).value.trim();
+        if (!idVal) {
+          Swal.showValidationMessage("กรุณากรอก LINE User ID");
+          return false;
+        }
+        if (!idVal.startsWith("U") || idVal.length < 15) {
+          Swal.showValidationMessage("รูปแบบ LINE User ID ไม่ถูกต้อง (ต้องขึ้นต้นด้วย U)");
+          return false;
+        }
+        return idVal;
+      },
+    }).then(async (result) => {
+      if (result.isConfirmed && result.value) {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/profile/line`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ lineUserId: result.value }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "เชื่อมต่อไม่สำเร็จ");
+
+          Swal.fire({
+            icon: "success",
+            title: "เชื่อมต่อบัญชี LINE สำเร็จ!",
+            text: "ระบบจะแจ้งเตือนงานใหม่เข้า LINE ส่วนตัวของคุณ",
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          setLineUserId(result.value);
+        } catch (err: any) {
+          Swal.fire({
+            icon: "error",
+            title: "ล้มเหลว",
+            text: err.message,
+            confirmButtonColor: "#dc2626",
+          });
+        }
+      }
+    });
   };
 
   // 👁️ ฟังก์ชันกดดูรายละเอียดงานแบบ Pop-up
@@ -413,11 +508,24 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
               รายการกิจกรรมทั้งหมด
             </h1>
-            <p className="text-xs text-gray-400 font-medium mt-0.5">
+            <p className="text-xs text-gray-400 font-medium mt-0.5 flex flex-wrap items-center gap-2">
               ระดับสิทธิ์ใช้งานปัจจุบันของคุณ:{" "}
               <span className="font-bold text-red-600 uppercase bg-red-50 px-2 py-0.5 rounded text-[11px]">
                 {currentUserRole}
               </span>
+              <span className="text-gray-300">|</span>
+              {lineUserId ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                  🟢 เชื่อมต่อ LINE แล้ว
+                </span>
+              ) : (
+                <button
+                  onClick={handleLinkLine}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded border border-red-200/40 transition-all cursor-pointer"
+                >
+                  🔗 เชื่อมต่อ LINE ส่วนตัว
+                </button>
+              )}
             </p>
           </div>
 

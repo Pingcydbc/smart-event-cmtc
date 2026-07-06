@@ -16,6 +16,15 @@ app.use(express.json());
 // เรียกใช้งานเส้นทาง API ทั้งหมดโดยจะเริ่มต้นด้วย /api เช่น /api/tasks
 app.use('/api', apiRoutes);
 
+// ตรวจสอบและอัปเดตตารางฐานข้อมูลอัตโนมัติเมื่อเปิดเซิร์ฟเวอร์
+try {
+  console.log("Checking database schema updates...");
+  await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(255);");
+  console.log("Database schema checked and updated successfully.");
+} catch (dbErr) {
+  console.error("Database migration check failed:", dbErr.message);
+}
+
 app.get('/', (req, res) => {
   res.send('Smart Event API is running fully standard.');
 });

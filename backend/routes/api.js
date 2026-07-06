@@ -297,6 +297,29 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
+// 2.5 GET & UPDATE PROFILE (สำหรับผูกบัญชี LINE)
+router.get("/auth/profile", authenticateToken, async (req, res) => {
+  try {
+    const result = await query("SELECT id, name, email, role, line_user_id FROM users WHERE id = $1", [req.user.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "ไม่พบผู้ใช้งาน" });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ message: "ดึงข้อมูลโปรไฟล์ไม่สำเร็จ" });
+  }
+});
+
+router.post("/auth/profile/line", authenticateToken, async (req, res) => {
+  const { lineUserId } = req.body;
+  try {
+    await query("UPDATE users SET line_user_id = $1 WHERE id = $2", [lineUserId || null, req.user.id]);
+    res.json({ message: "อัปเดตการเชื่อมต่อบัญชี LINE สำเร็จ" });
+  } catch (error) {
+    res.status(500).json({ message: "เชื่อมต่อบัญชี LINE ล้มเหลว" });
+  }
+});
+
 // 3. GET ALL TASKS: ดึงข้อมูลงานทั้งหมดขึ้นแดชบอร์ด (แยกตาม 4 Roles)
 router.get("/tasks", authenticateToken, async (req, res) => {
   const userId = req.user.id;
@@ -523,7 +546,7 @@ router.patch(
           .json({ message: "ไม่พบกิจกรรมที่ต้องการมอบหมาย" });
       }
 
-      const checkUser = await query("SELECT name FROM users WHERE id = $1", [
+      const checkUser = await query("SELECT name, line_user_id FROM users WHERE id = $1", [
         newUserId,
       ]);
       if (checkUser.rows.length === 0) {
@@ -533,6 +556,7 @@ router.patch(
       }
 
       const targetUserName = checkUser.rows[0].name;
+      const targetLineUserId = checkUser.rows[0].line_user_id;
       const oldTaskTitle = checkTask.rows[0].title;
 
       await query(
@@ -547,11 +571,23 @@ router.patch(
       });
 
       try {
-        const assignMessage = `🎖️ แอดมินมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n👤 เปลี่ยนผู้รับผิดชอบเป็น: ${targetUserName}\n(ระบบย้ายงานเข้าแดชบอร์ดส่วนตัวเรียบร้อยแล้วครับ)`;
-        await lineClient.pushMessage({
-          to: TARGET_GROUP_ID,
-          messages: [{ type: "text", text: assignMessage }],
-        });
+        const assignMessage = `🎖️ คุณได้รับมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n🚪 สถานที่: ${checkTask.rows[0].room}\n⏱️ เวลา: ${checkTask.rows[0].start_time ? checkTask.rows[0].start_time.slice(0, 5) : "08:30"} - ${checkTask.rows[0].end_time ? checkTask.rows[0].end_time.slice(0, 5) : "11:30"} น.\n(ระบบย้ายงานเข้าแดชบอร์ดส่วนตัวเรียบร้อยแล้วครับ)`;
+        
+        if (targetLineUserId) {
+          // หากผู้ใช้ผูกบัญชี LINE ไว้ ให้ส่งตรงไปยัง LINE ส่วนตัวของพนักงานรายนั้น
+          await lineClient.pushMessage({
+            to: targetLineUserId,
+            messages: [{ type: "text", text: assignMessage }],
+          });
+          console.log(`LINE: Sent personal notification to user ${targetUserName} (${targetLineUserId})`);
+        } else {
+          // หากยังไม่เชื่อมต่อบัญชี ให้แจ้งเตือนลงกลุ่มพนักงานพร้อมหมายเหตุบอกแอดมิน
+          const groupFallbackMessage = `🎖️ แอดมินมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n👤 ผู้รับผิดชอบ: ${targetUserName}\n(หมายเหตุ: พนักงานคนนี้ยังไม่ได้เชื่อมต่อบัญชี LINE ส่วนตัว)`;
+          await lineClient.pushMessage({
+            to: TARGET_GROUP_ID,
+            messages: [{ type: "text", text: groupFallbackMessage }],
+          });
+        }
       } catch (le) {
         console.error("LINE assign notify failed:", le.message);
       }
