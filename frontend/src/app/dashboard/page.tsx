@@ -184,6 +184,59 @@ export default function DashboardPage() {
     });
   };
 
+  // 🔗 ฟังก์ชันยกเลิกเชื่อมต่อไลน์ส่วนตัว
+  const handleUnlinkLine = () => {
+    const token = localStorage.getItem("token");
+
+    Swal.fire({
+      title: "ยืนยันการยกเลิกเชื่อมต่อ?",
+      text: "คุณจะไม่ได้รับการแจ้งเตือนงานใหม่เข้า LINE ส่วนตัวอีกต่อไป",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#4b5563",
+      confirmButtonText: "ใช่, ยกเลิกเชื่อมต่อ",
+      cancelButtonText: "ยกเลิก",
+      customClass: {
+        popup: "rounded-2xl",
+        cancelButton:
+          "border border-gray-200 text-gray-700 font-medium px-4 py-2",
+      },
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/profile/line`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ lineUserId: null }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "ยกเลิกการเชื่อมต่อไม่สำเร็จ");
+
+          Swal.fire({
+            icon: "success",
+            title: "ยกเลิกเชื่อมต่อสำเร็จ!",
+            text: "บัญชี LINE ของคุณถูกตัดการเชื่อมต่อแล้ว",
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          setLineUserId(null);
+        } catch (err: any) {
+          Swal.fire({
+            icon: "error",
+            title: "ล้มเหลว",
+            text: err.message,
+            confirmButtonColor: "#dc2626",
+          });
+        }
+      }
+    });
+  };
+
   // 👁️ ฟังก์ชันกดดูรายละเอียดงานแบบ Pop-up
   const handleViewDetails = (event: any) => {
     const formattedDate = new Date(event.date).toLocaleDateString("th-TH", {
@@ -529,9 +582,17 @@ export default function DashboardPage() {
               </span>
               <span className="text-gray-300">|</span>
               {lineUserId ? (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                  🟢 เชื่อมต่อ LINE แล้ว
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                    🟢 เชื่อมต่อ LINE แล้ว
+                  </span>
+                  <button
+                    onClick={handleUnlinkLine}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-2 py-0.5 rounded border border-gray-200/40 transition-all cursor-pointer"
+                  >
+                    ยกเลิกเชื่อมต่อ
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={handleLinkLine}
