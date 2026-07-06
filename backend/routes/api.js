@@ -37,7 +37,8 @@ function createFlexNotification(
   startTime,
   endTime,
   description,
-  bannerUrl, // 💡 รับค่า bannerUrl เข้ามา
+  bannerUrl,
+  taskId, // 💡 รับค่า taskId สำหรับนำไปสร้างปุ่มมอบหมายงานบน LIFF
 ) {
   const timeDisplay =
     startTime && endTime ? `${startTime} - ${endTime} น.` : "ไม่ได้ระบุเวลา";
@@ -227,6 +228,28 @@ function createFlexNotification(
     };
   }
 
+  // 💡 ถ้าเป็นกิจกรรมที่มีรหัส taskId (จากฝั่งสร้างงาน) ให้เพิ่มปุ่มมอบหมายงานผ่าน LIFF เข้าไปใต้การ์ด
+  if (taskId) {
+    flexContents.footer = {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#dc2626", // สีแดง CMTC
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "🎯 มอบหมายงาน",
+            uri: `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID || "2010617243-H2wIcDTp"}/assign?taskId=${taskId}`
+          }
+        }
+      ]
+    };
+  }
+
   return {
     type: "flex",
     altText: `📌 มีกิจกรรมใหม่: ${title}`,
@@ -405,6 +428,7 @@ router.post("/tasks", authenticateToken, async (req, res) => {
             endTime,
             description,
             bannerUrl,
+            result.rows[0].id, // 💡 ส่งรหัส ID กิจกรรมไปสร้างปุ่มมอบหมายผ่าน LIFF
           ),
         ],
       });
@@ -783,6 +807,110 @@ router.post("/admin/setup-rich-menu", authenticateToken, isAdmin, async (req, re
 
   } catch (error) {
     res.status(500).json({ message: "เกิดข้อผิดพลาดในการตั้งค่า Rich Menu" });
+  }
+});
+
+// ==========================================
+// 📱 LINE LIFF API: สำหรับแอดมินมอบหมายงานผ่าน LINE โดยตรง
+// ==========================================
+
+// 1. ตรวจสอบสิทธิ์ Admin จาก LINE User ID
+router.get("/liff/verify-admin", async (req, res) => {
+  const { lineUserId } = req.query;
+  if (!lineUserId) {
+    return res.status(400).json({ isAdmin: false, message: "กรุณาระบุ LINE User ID" });
+  }
+  try {
+    const result = await query("SELECT id, name, role FROM users WHERE line_user_id = $1", [lineUserId]);
+    if (result.rows.length > 0 && result.rows[0].role === "admin") {
+      return res.json({ isAdmin: true, user: result.rows[0] });
+    }
+    return res.json({ isAdmin: false, message: "สิทธิ์การเข้าถึงถูกปฏิเสธ: เฉพาะผู้ดูแลระบบที่เชื่อมต่อบัญชีแล้วเท่านั้น" });
+  } catch (error) {
+    res.status(500).json({ isAdmin: false, message: "เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์" });
+  }
+});
+
+// 2. ดึงรายชื่อสมาชิกสำหรับหน้ารายการ LIFF (ต้องยืนยันตัวตนแอดมิน)
+router.get("/liff/users", async (req, res) => {
+  const { adminLineUserId } = req.query;
+  try {
+    // ตรวจสอบว่าคนขอดึงข้อมูลคือ admin จริงไหม
+    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1", [adminLineUserId]);
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "ปฏิเสธการเข้าถึง: สิทธิ์ไม่ถูกต้อง" });
+    }
+
+    const result = await query("SELECT id, name, role FROM users ORDER BY name ASC");
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: "ไม่สามารถดึงข้อมูลรายชื่อพนักงานได้" });
+  }
+});
+
+// 3. มอบหมายงานใหม่ผ่าน LIFF (ต้องยืนยันตัวตนแอดมิน)
+router.post("/liff/assign", async (req, res) => {
+  const { adminLineUserId, taskId, newUserId } = req.body;
+
+  if (!adminLineUserId || !taskId || !newUserId) {
+    return res.status(400).json({ message: "ข้อมูลไม่ครบถ้วน" });
+  }
+
+  try {
+    // 1. ตรวจสอบสิทธิ์แอดมินคนกด
+    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1", [adminLineUserId]);
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "ปฏิเสธการเข้าถึง" });
+    }
+
+    // 2. ตรวจสอบงานที่จะมอบหมาย
+    const checkTask = await query("SELECT * FROM tasks WHERE id = $1", [taskId]);
+    if (checkTask.rows.length === 0) {
+      return res.status(404).json({ message: "ไม่พบข้อมูลกิจกรรม" });
+    }
+
+    // 3. ตรวจสอบผู้รับผิดชอบคนใหม่
+    const checkUser = await query("SELECT name, line_user_id FROM users WHERE id = $1", [newUserId]);
+    if (checkUser.rows.length === 0) {
+      return res.status(404).json({ message: "ไม่พบข้อมูลพนักงานที่จะรับมอบหมาย" });
+    }
+
+    const targetUserName = checkUser.rows[0].name;
+    const targetLineUserId = checkUser.rows[0].line_user_id;
+    const oldTaskTitle = checkTask.rows[0].title;
+
+    // 4. บันทึกการมอบหมายลงฐานข้อมูล
+    await query(
+      `UPDATE tasks 
+       SET user_id = $1, chairman = $2 
+       WHERE id = $3`,
+      [newUserId, targetUserName, taskId]
+    );
+
+    // 5. ส่ง LINE แจ้งเตือนไปยังพนักงานคนใหม่
+    try {
+      const assignMessage = `🎖️ คุณได้รับมอบหมายงานใหม่ผ่าน LINE!\n📝 เรื่อง: ${oldTaskTitle}\n🚪 สถานที่: ${checkTask.rows[0].room}\n⏱️ เวลา: ${checkTask.rows[0].start_time ? checkTask.rows[0].start_time.slice(0, 5) : "08:30"} - ${checkTask.rows[0].end_time ? checkTask.rows[0].end_time.slice(0, 5) : "11:30"} น.\n(งานนี้ปรากฏอยู่บนแดชบอร์ดของคุณเรียบร้อยแล้วครับ)`;
+      
+      if (targetLineUserId) {
+        await lineClient.pushMessage({
+          to: targetLineUserId,
+          messages: [{ type: "text", text: assignMessage }],
+        });
+      } else {
+        // หากคนรับงานไม่มี LINE ให้พ่นบอกในกลุ่มแอดมินส่วนกลาง
+        await lineClient.pushMessage({
+          to: TARGET_GROUP_ID,
+          messages: [{ type: "text", text: `📢 กิจกรรม "${oldTaskTitle}" ถูกมอบหมายให้คุณ ${targetUserName} แล้ว\n(หมายเหตุ: พนักงานยังไม่ได้เชื่อมต่อไลน์ส่วนตัว)` }],
+        });
+      }
+    } catch (lineErr) {
+      console.error("LIFF assign LINE notify error:", lineErr);
+    }
+
+    res.json({ message: "มอบหมายงานสำเร็จ!" });
+  } catch (error) {
+    console.error("LIFF Assign API Error:", error);
+    res.status(500).json({ message: "เกิดข้อผิดพลาดในการมอบหมายงาน" });
   }
 });
 
