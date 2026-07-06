@@ -394,6 +394,111 @@ export default function AdminDashboard() {
     });
   };
 
+  // 👤 8. ฟังก์ชันแอดมินลงทะเบียนบัญชีใหม่
+  const handleRegisterUser = () => {
+    const token = localStorage.getItem("token");
+
+    Swal.fire({
+      title: "👤 เพิ่มสมาชิกใหม่ (สิทธิ์แอดมิน)",
+      html: `
+        <div class="text-left space-y-3 pt-3 text-sm bg-white" id="register-form">
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">ชื่อ-นามสกุล</label>
+            <input id="swal-reg-name" type="text" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500" placeholder="ชื่อ นามสกุล">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">อีเมลบัญชี</label>
+            <input id="swal-reg-email" type="email" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500" placeholder="example@email.com">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">รหัสผ่าน</label>
+            <input id="swal-reg-password" type="password" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500" placeholder="อย่างน้อย 6 ตัวอักษร">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">ระดับสิทธิ์ (Role)</label>
+            <select id="swal-reg-role" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500">
+              <option value="user_n">USER_N (ผู้ใช้ทั่วไป)</option>
+              <option value="user_pr">USER_PR (ผู้ใช้ประชาสัมพันธ์)</option>
+              <option value="admin">ADMIN (ผู้ดูแลระบบ)</option>
+            </select>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#4b5563",
+      confirmButtonText: "ลงทะเบียนสมาชิก",
+      cancelButtonText: "ยกเลิก",
+      customClass: {
+        popup: "rounded-2xl",
+        cancelButton:
+          "border border-gray-200 text-gray-700 font-medium px-4 py-2",
+      },
+      preConfirm: () => {
+        const name = (document.getElementById("swal-reg-name") as HTMLInputElement).value.trim();
+        const email = (document.getElementById("swal-reg-email") as HTMLInputElement).value.trim();
+        const password = (document.getElementById("swal-reg-password") as HTMLInputElement).value.trim();
+        const role = (document.getElementById("swal-reg-role") as HTMLSelectElement).value;
+
+        if (!name || !email || !password) {
+          Swal.showValidationMessage("กรุณากรอกข้อมูลให้ครบถ้วน");
+          return false;
+        }
+        if (password.length < 6) {
+          Swal.showValidationMessage("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+          return false;
+        }
+        return { name, email, password, role };
+      },
+    }).then(async (result) => {
+      if (result.isConfirmed && result.value) {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/register`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(result.value),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "ลงทะเบียนไม่สำเร็จ");
+
+          Swal.fire({
+            icon: "success",
+            title: "เพิ่มสมาชิกสำเร็จ!",
+            text: `สร้างบัญชีสำหรับคุณ ${result.value.name} เรียบร้อยแล้ว`,
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          fetchAdminData(token!);
+        } catch (err: any) {
+          Swal.fire({
+            icon: "error",
+            title: "ล้มเหลว",
+            text: err.message,
+            confirmButtonColor: "#dc2626",
+          });
+        }
+      }
+    });
+  };
+
+  // กรองเฉพาะกิจกรรมที่ยังไม่ผ่านไปเกิน 1 วัน สำหรับการแสดงผลรายการ (List View) ของแอดมิน
+  const activeListEvents = events.filter((event: any) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const eventDate = new Date(event.date);
+    eventDate.setHours(0, 0, 0, 0);
+
+    const diffTime = today.getTime() - eventDate.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    return diffDays < 1; // แสดงเฉพาะงานวันนี้และอนาคต (ซ่อนงานที่ผ่านไปแล้ว 1 วันขึ้นไป)
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white text-gray-500 font-medium text-sm">
@@ -433,7 +538,7 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab("events")}
               className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${activeTab === "events" ? "bg-white text-red-600 shadow-sm font-semibold" : "text-gray-500 hover:text-gray-900"}`}
             >
-              <Calendar className="h-4 w-4" /> จัดการกิจกรรม ({events.length})
+              <Calendar className="h-4 w-4" /> จัดการกิจกรรม ({activeListEvents.length})
             </button>
             <button
               onClick={() => setActiveTab("users")}
@@ -454,7 +559,7 @@ export default function AdminDashboard() {
             <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
               รายการกิจกรรมทั้งหมดในระบบ
             </h2>
-            {events.length === 0 ? (
+            {activeListEvents.length === 0 ? (
               <div className="text-center py-12 text-gray-400 text-sm border border-dashed border-gray-200 rounded-2xl">
                 ไม่มีกิจกรรมใด ๆ ในระบบตอนนี้
               </div>
@@ -471,7 +576,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 text-gray-700">
-                      {events.map((event: any) => (
+                      {activeListEvents.map((event: any) => (
                         <tr
                           key={event.id}
                           className="hover:bg-gray-50/40 transition-colors"
@@ -575,9 +680,17 @@ export default function AdminDashboard() {
             animate={{ opacity: 1 }}
             className="space-y-4"
           >
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
-              รายชื่อสมาชิกที่ใช้งานระบบ
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                รายชื่อสมาชิกที่ใช้งานระบบ
+              </h2>
+              <button
+                onClick={handleRegisterUser}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl transition-all"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> เพิ่มสมาชิกใหม่
+              </button>
+            </div>
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.01)]">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">

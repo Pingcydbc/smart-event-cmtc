@@ -234,9 +234,9 @@ function createFlexNotification(
   };
 }
 
-// 1. REGISTER: สมัครสมาชิก
-router.post("/auth/register", async (req, res) => {
-  const { name, email, password } = req.body;
+// 1. REGISTER: สมัครสมาชิก (อนุญาตเฉพาะ Admin เท่านั้น)
+router.post("/auth/register", authenticateToken, isAdmin, async (req, res) => {
+  const { name, email, password, role } = req.body;
   if (!password || password.length < 6) {
     return res
       .status(400)
@@ -244,13 +244,14 @@ router.post("/auth/register", async (req, res) => {
   }
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userRole = role || "user_n"; // กำหนดสิทธิ์เริ่มต้นเป็น user_n หากไม่ได้ระบุ
     const result = await query(
-      "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, 'user_n') RETURNING id, name, email, role",
-      [name, email, hashedPassword],
+      "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role",
+      [name, email, hashedPassword, userRole],
     );
     res
       .status(201)
-      .json({ message: "สมัครสมาชิกสำเร็จ", user: result.rows[0] });
+      .json({ message: "สมัครสมาชิกให้ผู้ใช้ใหม่สำเร็จ", user: result.rows[0] });
   } catch (error) {
     res
       .status(400)

@@ -388,6 +388,20 @@ export default function DashboardPage() {
     );
   }
 
+  // กรองเฉพาะกิจกรรมที่ยังไม่ผ่านไปเกิน 1 วัน สำหรับการแสดงผลแบบการ์ดรายการ (List View)
+  const activeListEvents = events.filter((event: any) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const eventDate = new Date(event.date);
+    eventDate.setHours(0, 0, 0, 0);
+
+    const diffTime = today.getTime() - eventDate.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    return diffDays < 1; // แสดงเฉพาะงานวันนี้และอนาคต (ซ่อนงานที่ผ่านไปแล้ว 1 วันขึ้นไป)
+  });
+
   return (
     <div className="w-full bg-white min-h-screen flex flex-col justify-between selection:bg-red-100 selection:text-red-900">
       <Navbar userName={userName} onLogout={handleLogout} />
@@ -446,13 +460,13 @@ export default function DashboardPage() {
         {/* 📋 โหมดที่ 1: แบบการ์ดเดี่ยว (List View เดิม) */}
         {viewMode === "list" && (
           <div>
-            {events.length === 0 ? (
+            {activeListEvents.length === 0 ? (
               <div className="text-center py-20 border border-dashed border-gray-200 rounded-2xl text-gray-400 font-medium text-sm">
                 ยังไม่มีกำหนดการกิจกรรมในขณะนี้
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {events.map((event: any, index: number) => (
+                {activeListEvents.map((event: any, index: number) => (
                   <motion.div
                     key={event.id}
                     initial={{ opacity: 0, y: 15 }}

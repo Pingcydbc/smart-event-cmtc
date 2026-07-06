@@ -5,9 +5,7 @@ import Swal from "sweetalert2";
 
 export default function Page() {
   const router = useRouter();
-  const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
-    name: "",
     email: "",
     password: "",
   });
@@ -19,20 +17,8 @@ export default function Page() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isLogin && formData.password.length < 6) {
-      Swal.fire({
-        icon: "error",
-        title: "สมัครสมาชิกไม่สำเร็จ",
-        text: "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษรขึ้นไป",
-        confirmButtonColor: "#dc2626", // สีแดง CMTC
-      });
-      return;
-    }
-
-    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -41,29 +27,18 @@ export default function Page() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "เกิดข้อผิดพลาด");
 
-      if (isLogin) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-        Swal.fire({
-          icon: "success",
-          title: "เข้าสู่ระบบสำเร็จ",
-          text: `ยินดีต้อนรับคุณ ${data.user.name}`,
-          timer: 1500,
-          showConfirmButton: false,
-        }).then(() => {
-          router.push("/dashboard");
-        });
-      } else {
-        Swal.fire({
-          icon: "success",
-          title: "สมัครสมาชิกสำเร็จ!",
-          text: "กรุณาเข้าสู่ระบบด้วยบัญชีใหม่ของคุณ",
-          confirmButtonColor: "#dc2626",
-        });
-        setFormData({ name: "", email: "", password: "" });
-        setIsLogin(true);
-      }
+      Swal.fire({
+        icon: "success",
+        title: "เข้าสู่ระบบสำเร็จ",
+        text: `ยินดีต้อนรับคุณ ${data.user.name}`,
+        timer: 1500,
+        showConfirmButton: false,
+      }).then(() => {
+        router.push("/dashboard");
+      });
     } catch (err: any) {
       Swal.fire({
         icon: "error",
@@ -82,27 +57,11 @@ export default function Page() {
             Smart Event CMTC
           </h2>
           <p className="text-sm text-gray-400 mt-1">
-            {isLogin ? "เข้าสู่ระบบเพื่อจัดการกิจกรรม" : "สร้างบัญชีผู้ใช้ใหม่"}
+            เข้าสู่ระบบเพื่อจัดการกิจกรรม
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {!isLogin && (
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                ชื่อ-นามสกุล
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-red-500 text-gray-900 transition-all duration-200"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-            </div>
-          )}
           <div className="space-y-1">
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
               อีเมล
@@ -137,21 +96,9 @@ export default function Page() {
             type="submit"
             className="w-full py-3 px-4 bg-white hover:bg-red-600 border border-red-600 text-red-600 hover:text-white font-medium rounded-xl transition-all duration-300 active:scale-[0.99] mt-2"
           >
-            {isLogin ? "เข้าสู่ระบบ" : "ลงทะเบียนบัญชีใหม่"}
+            เข้าสู่ระบบ
           </button>
         </form>
-
-        <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-          <p className="text-sm text-gray-500">
-            {isLogin ? "ยังไม่มีบัญชีผู้ใช้?" : "มีบัญชีผู้ใช้อยู่แล้ว?"}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="ml-1.5 text-red-600 font-bold hover:underline"
-            >
-              {isLogin ? "สมัครสมาชิก" : "เข้าสู่ระบบที่นี่"}
-            </button>
-          </p>
-        </div>
       </div>
     </div>
   );
