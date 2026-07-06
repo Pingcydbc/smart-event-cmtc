@@ -94,13 +94,27 @@ export default function DashboardPage() {
   // 🔗 ฟังก์ชันเชื่อมต่อไลน์ส่วนตัว
   const handleLinkLine = () => {
     const token = localStorage.getItem("token");
+    const liffId = process.env.NEXT_PUBLIC_LIFF_ID || "2006734185-dummy";
+    const liffUrl = `https://liff.line.me/${liffId}`;
 
     Swal.fire({
       title: "🔗 เชื่อมต่อ LINE ส่วนตัว",
       html: `
-        <div class="text-left space-y-3 pt-3 text-sm bg-white">
+        <div class="text-left space-y-4 pt-3 text-sm bg-white">
+          <div class="text-center pb-2">
+            <a href="${liffUrl}" target="_blank" class="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-sm decoration-none">
+              🟢 เชื่อมต่ออัตโนมัติผ่านแอป LINE (LIFF)
+            </a>
+          </div>
+
+          <div class="relative flex py-2 items-center">
+            <div class="flex-grow border-t border-gray-100"></div>
+            <span class="flex-shrink mx-4 text-gray-400 text-xs font-semibold uppercase">หรือ กรอกรหัสด้วยตัวเอง</span>
+            <div class="flex-grow border-t border-gray-100"></div>
+          </div>
+
           <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs text-gray-600">
-            <strong>📋 ขั้นตอนการรับรหัส LINE User ID:</strong>
+            <strong>📋 ขั้นตอนการรับรหัสด้วยตัวเอง:</strong>
             <ol class="list-decimal list-inside mt-1.5 space-y-1">
               <li>แอดไลน์ Official Account ของระบบเป็นเพื่อน</li>
               <li>พิมพ์ส่งข้อความคำว่า <span class="font-bold text-red-600 font-mono">id</span> ในแชทไลน์</li>
@@ -116,7 +130,7 @@ export default function DashboardPage() {
       showCancelButton: true,
       confirmButtonColor: "#10b981",
       cancelButtonColor: "#4b5563",
-      confirmButtonText: "เชื่อมต่อบัญชี",
+      confirmButtonText: "เชื่อมต่อบัญชีแบบระบุมือ",
       cancelButtonText: "ยกเลิก",
       customClass: {
         popup: "rounded-2xl",
