@@ -22,6 +22,7 @@ services:
       - JWT_SECRET=supersecretkey123
       - LINE_CHANNEL_SECRET=537314e42d2001e33beb278725f25ed7
       - LINE_CHANNEL_ACCESS_TOKEN=2QlKCg+BeINN4rQzE8TBz5hnR1C2mfkvpWUnj/FoytUvXUF0MXdoMWoYiHYVajo3StwQy3EP+U1XD+dM/OKq0EDuELgUfExmetGAcuib8wN5iE0dWZUGPawDtpn5FzIJlbK9+yKeFzBpnJP6bqsSzgdB04t89/1O/w1cDnyilFU=
+      - NEXT_PUBLIC_LIFF_ID=2010617243-H2wIcDTp
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -35,6 +36,7 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_LIFF_ID=2010617243-H2wIcDTp
     volumes:
       - ./frontend:/app
       - /app/node_modules
