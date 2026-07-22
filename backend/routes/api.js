@@ -38,211 +38,309 @@ function createFlexNotification(
   endTime,
   description,
   bannerUrl,
-  taskId, // 💡 รับค่า taskId สำหรับนำไปสร้างปุ่มมอบหมายงานบน LIFF
+  taskId,
 ) {
   const timeDisplay =
-    startTime && endTime ? `${startTime} - ${endTime} น.` : "ไม่ได้ระบุเวลา";
+    startTime && endTime ? `${startTime.slice(0, 5)} - ${endTime.slice(0, 5)} น.` : "ไม่ได้ระบุเวลา";
 
-  // 💡 สร้างโครงสร้าง Flex Message พื้นฐาน
+  // กำหนดธีมสีตามหมวดหมู่กิจกรรมเพื่อความสวยงามและแยกแยะง่าย
+  let themeColor = "#DC2626"; // สีแดง CMTC เป็นสีเริ่มต้น
+  let themeBg = "#FEF2F2";
+  
+  if (category === "การเงิน") {
+    themeColor = "#10B981"; // Emerald
+    themeBg = "#ECFDF5";
+  } else if (category === "การตลาด") {
+    themeColor = "#F59E0B"; // Amber
+    themeBg = "#FEF3C7";
+  } else if (category === "ประชาสัมพันธ์") {
+    themeColor = "#0284C7"; // Sky
+    themeBg = "#F0F9FF";
+  } else if (category === "กิจกรรม") {
+    themeColor = "#E11D48"; // Rose
+    themeBg = "#FFF1F2";
+  }
+
+  // โครงสร้าง Flex Message ดีไซน์ Premium
   const flexContents = {
     type: "bubble",
     size: "giga",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: "#4682B4",
-      contents: [
-        {
-          type: "text",
-          text: "📢 แจ้งเตือนกิจกรรมใหม่",
-          weight: "bold",
-          color: "#FFFFFF",
-          size: "md",
-        },
-      ],
-    },
     body: {
       type: "box",
       layout: "vertical",
-      spacing: "md",
+      paddingAll: "0px",
       contents: [
-        {
-          type: "text",
-          text: title,
-          weight: "bold",
-          size: "xl",
-          wrap: true,
-          color: "#111111",
-        },
-        { type: "separator", color: "#EEEEEE" },
+        // 1. Banner รูปภาพ (ถ้ามี)
+        ...(bannerUrl ? [{
+          type: "image",
+          url: bannerUrl,
+          size: "full",
+          aspectRatio: "20:11",
+          aspectMode: "cover",
+        }] : []),
+        
+        // 2. ส่วนเนื้อหาหลัก
         {
           type: "box",
           layout: "vertical",
-          spacing: "sm",
+          paddingAll: "20px",
           contents: [
+            // หมวดหมู่ (Pill Badge)
             {
               type: "box",
               layout: "horizontal",
               contents: [
                 {
-                  type: "text",
-                  text: "📁 ประเภท",
-                  size: "sm",
-                  color: "#AAAAAA",
-                  flex: 2,
+                  type: "box",
+                  layout: "vertical",
+                  backgroundColor: themeBg,
+                  cornerRadius: "6px",
+                  paddingPercent: "10%",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  contents: [
+                    {
+                      type: "text",
+                      text: category || "กิจกรรมทั่วไป",
+                      color: themeColor,
+                      size: "xs",
+                      weight: "bold",
+                    }
+                  ]
                 },
                 {
                   type: "text",
-                  text: category,
-                  size: "sm",
-                  color: "#333333",
-                  flex: 5,
-                  wrap: true,
-                },
-              ],
-            },
-            {
-              type: "box",
-              layout: "horizontal",
-              contents: [
-                {
-                  type: "text",
-                  text: "📅 วันที่",
-                  size: "sm",
-                  color: "#AAAAAA",
-                  flex: 2,
-                },
-                {
-                  type: "text",
-                  text: date,
-                  size: "sm",
-                  color: "#333333",
-                  flex: 5,
-                  wrap: true,
-                },
-              ],
-            },
-            {
-              type: "box",
-              layout: "horizontal",
-              contents: [
-                {
-                  type: "text",
-                  text: "⏱️ เวลา",
-                  size: "sm",
-                  color: "#AAAAAA",
-                  flex: 2,
-                },
-                {
-                  type: "text",
-                  text: timeDisplay,
-                  size: "sm",
-                  color: "#DC2626",
+                  text: "📌 กิจกรรมใหม่",
+                  color: "#94A3B8",
+                  size: "xs",
                   weight: "bold",
-                  flex: 5,
-                  wrap: true,
-                },
-              ],
+                  align: "end",
+                  gravity: "center"
+                }
+              ]
             },
+            
+            // หัวข้องาน
             {
-              type: "box",
-              layout: "horizontal",
-              contents: [
-                {
-                  type: "text",
-                  text: "👤 ผู้รับผิดชอบ",
-                  size: "sm",
-                  color: "#AAAAAA",
-                  flex: 2,
-                },
-                {
-                  type: "text",
-                  text: chairman,
-                  size: "sm",
-                  color: "#333333",
-                  flex: 5,
-                  wrap: true,
-                },
-              ],
+              type: "text",
+              text: title,
+              weight: "bold",
+              size: "xl",
+              color: "#0F172A",
+              wrap: true,
+              margin: "md",
             },
-            {
-              type: "box",
-              layout: "horizontal",
-              contents: [
-                {
-                  type: "text",
-                  text: "🚪 สถานที่",
-                  size: "sm",
-                  color: "#AAAAAA",
-                  flex: 2,
-                },
-                {
-                  type: "text",
-                  text: room,
-                  size: "sm",
-                  color: "#333333",
-                  flex: 5,
-                  wrap: true,
-                },
-              ],
-            },
+            
+            // เส้นแบ่งตกแต่ง
             {
               type: "box",
               layout: "vertical",
-              backgroundColor: "#F9FAFB",
-              paddingAll: "md",
-              cornerRadius: "md",
-              margin: "md",
+              margin: "lg",
+              height: "2px",
+              backgroundColor: "#F1F5F9"
+            },
+            
+            // รายละเอียด วัน-เวลา และสถานที่ (Grid Card Layout)
+            {
+              type: "box",
+              layout: "vertical",
+              margin: "lg",
+              spacing: "md",
+              contents: [
+                // แถวที่ 1: วันและเวลา
+                {
+                  type: "box",
+                  layout: "horizontal",
+                  spacing: "md",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      width: "36px",
+                      height: "36px",
+                      backgroundColor: "#F8FAFC",
+                      cornerRadius: "100px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "📅",
+                          size: "md",
+                          align: "center"
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "วันจัดกิจกรรม",
+                          size: "xs",
+                          color: "#94A3B8",
+                          weight: "medium"
+                        },
+                        {
+                          type: "text",
+                          text: `${date} (${timeDisplay})`,
+                          size: "sm",
+                          color: "#334155",
+                          weight: "bold",
+                          wrap: true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                // แถวที่ 2: สถานที่จัดงาน
+                {
+                  type: "box",
+                  layout: "horizontal",
+                  spacing: "md",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      width: "36px",
+                      height: "36px",
+                      backgroundColor: "#F8FAFC",
+                      cornerRadius: "100px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "🚪",
+                          size: "md",
+                          align: "center"
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "สถานที่จัดงาน",
+                          size: "xs",
+                          color: "#94A3B8",
+                          weight: "medium"
+                        },
+                        {
+                          type: "text",
+                          text: room || "ไม่ได้ระบุสถานที่",
+                          size: "sm",
+                          color: "#334155",
+                          weight: "bold",
+                          wrap: true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                // แถวที่ 3: ผู้รับผิดชอบ
+                {
+                  type: "box",
+                  layout: "horizontal",
+                  spacing: "md",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      width: "36px",
+                      height: "36px",
+                      backgroundColor: "#F8FAFC",
+                      cornerRadius: "100px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "👤",
+                          size: "md",
+                          align: "center"
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "ผู้รับผิดชอบงาน",
+                          size: "xs",
+                          color: "#94A3B8",
+                          weight: "medium"
+                        },
+                        {
+                          type: "text",
+                          text: chairman || "ไม่ได้ระบุผู้รับผิดชอบ",
+                          size: "sm",
+                          color: "#334155",
+                          weight: "bold",
+                          wrap: true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            
+            // กล่องวาระงาน (ถ้ามีรายละเอียด)
+            ...(description ? [{
+              type: "box",
+              layout: "vertical",
+              backgroundColor: "#F8FAFC",
+              paddingAll: "12px",
+              cornerRadius: "8px",
+              margin: "lg",
+              borderWidth: "1px",
+              borderColor: "#E2E8F0",
               contents: [
                 {
                   type: "text",
-                  text: "📝 รายละเอียด/สิ่งที่ต้องทำ:",
+                  text: "📝 วาระ / สิ่งที่ต้องทำ",
                   size: "xs",
-                  color: "#888888",
-                  weight: "bold",
+                  color: "#64748B",
+                  weight: "bold"
                 },
                 {
                   type: "text",
-                  text: description || "ไม่มีรายละเอียดเพิ่มเติม",
+                  text: description,
                   size: "sm",
-                  color: "#444444",
+                  color: "#475569",
                   wrap: true,
-                  margin: "xs",
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
+                  margin: "xs"
+                }
+              ]
+            }] : [])
+          ]
+        }
+      ]
+    }
   };
 
-  // 💡 ถ้ามีการใส่ bannerUrl ให้เพิ่มส่วน hero เข้าไปในการ์ด Flex
-  if (bannerUrl) {
-    flexContents.hero = {
-      type: "image",
-      url: bannerUrl,
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-    };
-  }
-
-  // 💡 ถ้าเป็นกิจกรรมที่มีรหัส taskId (จากฝั่งสร้างงาน) ให้เพิ่มปุ่มมอบหมายงานผ่าน LIFF เข้าไปใต้การ์ด
+  // ปุ่มกดมอบหมายงานด้านล่าง (Footer)
   if (taskId) {
     flexContents.footer = {
       type: "box",
       layout: "vertical",
-      spacing: "sm",
+      paddingAll: "16px",
+      paddingTop: "0px",
       contents: [
         {
           type: "button",
           style: "primary",
-          color: "#dc2626", // สีแดง CMTC
-          height: "sm",
+          color: themeColor, // ปรับสีปุ่มตามธีมหมวดหมู่
+          height: "md",
           action: {
             type: "uri",
-            label: "🎯 มอบหมายงาน",
+            label: "🎯 มอบหมายงานใหม่",
             uri: `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID || "2010617243-H2wIcDTp"}/assign?taskId=${taskId}`
           }
         }
@@ -336,6 +434,10 @@ router.get("/auth/profile", authenticateToken, async (req, res) => {
 router.post("/auth/profile/line", authenticateToken, async (req, res) => {
   const { lineUserId } = req.body;
   try {
+    if (lineUserId) {
+      // เคลียร์ line_user_id นี้จากบัญชีอื่นก่อน เพื่อป้องกันการซ้ำซ้อน
+      await query("UPDATE users SET line_user_id = NULL WHERE line_user_id = $1 AND id != $2", [lineUserId, req.user.id]);
+    }
     await query("UPDATE users SET line_user_id = $1 WHERE id = $2", [lineUserId || null, req.user.id]);
     res.json({ message: "อัปเดตการเชื่อมต่อบัญชี LINE สำเร็จ" });
   } catch (error) {
@@ -810,9 +912,46 @@ router.post("/admin/setup-rich-menu", authenticateToken, isAdmin, async (req, re
   }
 });
 
-// ==========================================
-// 📱 LINE LIFF API: สำหรับแอดมินมอบหมายงานผ่าน LINE โดยตรง
-// ==========================================
+// 0. เข้าสู่ระบบอัตโนมัติผ่าน LINE User ID (สำหรับผู้ใช้งานทั่วไปและแอดมินบน LIFF)
+router.get("/liff/login-by-line", async (req, res) => {
+  const { lineUserId } = req.query;
+  if (!lineUserId) {
+    return res.status(400).json({ success: false, message: "กรุณาระบุ LINE User ID" });
+  }
+
+  try {
+    const result = await query("SELECT id, name, email, role, line_user_id FROM users WHERE line_user_id = $1", [lineUserId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "บัญชี LINE นี้ยังไม่ได้เชื่อมต่อกับระบบ" });
+    }
+
+    const user = result.rows[0];
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role || "user_n",
+      },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role || "user_n"
+      }
+    });
+  } catch (error) {
+    console.error("LIFF Auto Login Error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการเข้าสู่ระบบอัตโนมัติ" });
+  }
+});
 
 // 1. ตรวจสอบสิทธิ์ Admin จาก LINE User ID
 router.get("/liff/verify-admin", async (req, res) => {
@@ -821,8 +960,8 @@ router.get("/liff/verify-admin", async (req, res) => {
     return res.status(400).json({ isAdmin: false, message: "กรุณาระบุ LINE User ID" });
   }
   try {
-    const result = await query("SELECT id, name, role FROM users WHERE line_user_id = $1", [lineUserId]);
-    if (result.rows.length > 0 && result.rows[0].role === "admin") {
+    const result = await query("SELECT id, name, role FROM users WHERE line_user_id = $1 AND role = 'admin'", [lineUserId]);
+    if (result.rows.length > 0) {
       return res.json({ isAdmin: true, user: result.rows[0] });
     }
     return res.json({ isAdmin: false, message: "สิทธิ์การเข้าถึงถูกปฏิเสธ: เฉพาะผู้ดูแลระบบที่เชื่อมต่อบัญชีแล้วเท่านั้น" });
@@ -836,8 +975,8 @@ router.get("/liff/users", async (req, res) => {
   const { adminLineUserId } = req.query;
   try {
     // ตรวจสอบว่าคนขอดึงข้อมูลคือ admin จริงไหม
-    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1", [adminLineUserId]);
-    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1 AND role = 'admin'", [adminLineUserId]);
+    if (adminCheck.rows.length === 0) {
       return res.status(403).json({ message: "ปฏิเสธการเข้าถึง: สิทธิ์ไม่ถูกต้อง" });
     }
 
@@ -858,8 +997,8 @@ router.post("/liff/assign", async (req, res) => {
 
   try {
     // 1. ตรวจสอบสิทธิ์แอดมินคนกด
-    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1", [adminLineUserId]);
-    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1 AND role = 'admin'", [adminLineUserId]);
+    if (adminCheck.rows.length === 0) {
       return res.status(403).json({ message: "ปฏิเสธการเข้าถึง" });
     }
 
