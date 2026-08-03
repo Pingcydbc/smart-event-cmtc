@@ -882,7 +882,10 @@ router.post("/admin/setup-rich-menu", authenticateToken, isAdmin, async (req, re
       areas: [
         {
           bounds: { x: 0, y: 0, width: 833, height: 843 },
-          action: { type: "uri", uri: "https://smart-event-frontend.vercel.app" } // เปลี่ยนเป็น URL เว็บคุณ
+          action: { 
+            type: "uri", 
+            uri: `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID || "2010617243-H2wIcDTp"}` 
+          }
         },
         {
           bounds: { x: 833, y: 0, width: 833, height: 843 },

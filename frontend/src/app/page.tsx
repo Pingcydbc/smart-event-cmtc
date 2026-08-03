@@ -99,6 +99,20 @@ export default function Page() {
             เข้าสู่ระบบ
           </button>
         </form>
+
+        <div className="relative flex py-3 items-center my-2">
+          <div className="flex-grow border-t border-gray-100"></div>
+          <span className="flex-shrink mx-4 text-gray-400 text-xs font-semibold uppercase">หรือ</span>
+          <div className="flex-grow border-t border-gray-100"></div>
+        </div>
+
+        <a
+          href={`https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID || "2010617243-H2wIcDTp"}`}
+          className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-sm text-sm"
+          style={{ textDecoration: "none" }}
+        >
+          🟢 เข้าสู่ระบบด้วย LINE (LIFF)
+        </a>
       </div>
     </div>
   );
