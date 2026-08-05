@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import Swal from "sweetalert2";
 
 export default function LiffPage() {
@@ -8,6 +9,7 @@ export default function LiffPage() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"my" | "all">("my");
   const [loading, setLoading] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [formData, setFormData] = useState({
@@ -72,11 +74,11 @@ export default function LiffPage() {
     }
   };
 
-  // ดึงข้อมูลกิจกรรม
+  // ดึงข้อมูลกิจกรรมทั้งหมดสำหรับแสดงผลใน LIFF
   const fetchTasks = async (jwtToken: string) => {
     setLoadingTasks(true);
     try {
-      const res = await fetch(`${API_URL}/api/tasks`, {
+      const res = await fetch(`${API_URL}/api/tasks?showAll=true`, {
         headers: { Authorization: `Bearer ${jwtToken}` },
       });
       if (res.ok) {
@@ -87,6 +89,56 @@ export default function LiffPage() {
       console.error("Fetch tasks error:", err);
     } finally {
       setLoadingTasks(false);
+    }
+  };
+
+  // ฟังก์ชันกดรับงานมอบหมายสำหรับ Staff
+  const handleAcceptTask = async (taskId: number, taskTitle: string) => {
+    const result = await Swal.fire({
+      title: "ยืนยันการรับงาน",
+      text: `คุณต้องการรับงาน "${taskTitle}" หรือไม่?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "ใช่, ยืนยัน",
+      cancelButtonText: "ยกเลิก",
+      customClass: {
+        popup: "rounded-2xl",
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${taskId}/accept`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "เกิดข้อผิดพลาดในการรับงาน");
+
+      await Swal.fire({
+        icon: "success",
+        title: "สำเร็จ!",
+        text: "คุณรับงานเรียบร้อยแล้ว",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+
+      if (token) {
+        await fetchTasks(token);
+      }
+    } catch (err: any) {
+      Swal.fire({
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
+        text: err.message,
+        confirmButtonColor: "#dc2626",
+      });
     }
   };
 
@@ -235,12 +287,60 @@ export default function LiffPage() {
 
           {/* รายการกิจกรรมสำหรับผู้ใช้งานนั้นๆ */}
           <div className="p-4 flex-1">
+            {/* ปุ่มเพิ่มงานสำหรับ normal user (PR / ประชาสัมพันธ์) และแอดมิน */}
+            {(user.role === "admin" || user.role === "user_pr") && (
+              <div className="mb-5">
+                <Link
+                  href="/form"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-700 hover:to-rose-600 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-xs font-bold shadow-md shadow-red-500/10 transition-all text-center"
+                >
+                  ➕ เพิ่มกิจกรรมใหม่ / สร้างงาน
+                </Link>
+              </div>
+            )}
+
+            {/* แท็บสลับหน้างานสำหรับ Staff / ผู้ปฏิบัติงาน */}
+            {user.role === "user_n" && (
+              <div className="flex bg-slate-200/60 p-1 rounded-xl mb-4 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("my")}
+                  className={`flex-1 py-2 text-center rounded-lg transition-all ${
+                    activeTab === "my"
+                      ? "bg-white text-slate-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  🎖️ งานของคุณ ({tasks.filter((t) => t.user_id === user.id).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("all")}
+                  className={`flex-1 py-2 text-center rounded-lg transition-all ${
+                    activeTab === "all"
+                      ? "bg-white text-slate-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  📋 งานทั้งหมดที่เปิดรับ ({tasks.length})
+                </button>
+              </div>
+            )}
+
+            {/* หัวข้อเรื่องและจำนวนกิจกรรม */}
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-sm font-bold text-slate-800">
-                {user.role === "admin" || user.role === "user_pr" ? "📋 งานทั้งหมดในระบบ" : "🎖️ งานที่คุณได้รับมอบหมาย"}
+                {user.role === "admin" || user.role === "user_pr" 
+                  ? "📋 งานทั้งหมดในระบบ" 
+                  : activeTab === "my" 
+                    ? "🎖️ งานที่คุณได้รับมอบหมาย" 
+                    : "📋 รายการงานทั้งหมดที่รับได้"}
               </h4>
               <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                {tasks.length} กิจกรรม
+                {(user.role === "user_n" 
+                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
+                  : tasks
+                ).length} กิจกรรม
               </span>
             </div>
 
@@ -249,7 +349,10 @@ export default function LiffPage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                 <p className="text-xs text-slate-400 mt-2">กำลังดึงข้อมูลกิจกรรม...</p>
               </div>
-            ) : tasks.length === 0 ? (
+            ) : (user.role === "user_n" 
+                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
+                  : tasks
+                ).length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center shadow-[0_4px_20px_rgba(0,0,0,0.01)]">
                 <span className="text-3xl block mb-2">🎉</span>
                 <h5 className="text-xs font-bold text-slate-700">ไม่มีกิจกรรมนัดหมายในขณะนี้</h5>
@@ -257,7 +360,10 @@ export default function LiffPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {tasks.map((task) => (
+                {(user.role === "user_n" 
+                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
+                  : tasks
+                ).map((task) => (
                   <div
                     key={task.id}
                     className="bg-white p-4 rounded-xl border border-slate-100/80 shadow-sm flex flex-col gap-2 hover:border-slate-200 transition-all"
@@ -288,6 +394,24 @@ export default function LiffPage() {
                         <span className="font-semibold text-slate-700">👤 ผู้ดูแล:</span> {task.chairman}
                       </div>
                     </div>
+
+                    {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_n) */}
+                    {user.role === "user_n" && (
+                      <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
+                        {task.user_id === user.id ? (
+                          <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                            ✅ คุณได้รับผิดชอบงานนี้แล้ว
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleAcceptTask(task.id, task.title)}
+                            className="bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-bold py-1.5 px-3.5 rounded-lg transition-all shadow-sm shadow-red-500/10 flex items-center gap-1"
+                          >
+                            📥 กดรับงานนี้
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -449,10 +449,11 @@ router.post("/auth/profile/line", authenticateToken, async (req, res) => {
 router.get("/tasks", authenticateToken, async (req, res) => {
   const userId = req.user.id;
   const userRole = req.user.role;
+  const { showAll } = req.query;
 
   try {
     let result;
-    if (userRole === "admin" || userRole === "user_pr") {
+    if (userRole === "admin" || userRole === "user_pr" || showAll === "true") {
       result = await query(`
         SELECT tasks.*, users.name as creator_name 
         FROM tasks 
@@ -474,6 +475,46 @@ router.get("/tasks", authenticateToken, async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ message: "ไม่สามารถดึงข้อมูลแดชบอร์ดได้" });
+  }
+});
+
+// 3.5 POST ACCEPT TASK: รับงานมอบหมาย (สำหรับ Staff/ผู้ปฏิบัติงาน)
+router.post("/tasks/:id/accept", authenticateToken, async (req, res) => {
+  const taskId = req.params.id;
+  const userId = req.user.id;
+  const userName = req.user.name;
+
+  try {
+    // 1. ตรวจสอบกิจกรรม
+    const checkTask = await query("SELECT * FROM tasks WHERE id = $1", [taskId]);
+    if (checkTask.rows.length === 0) {
+      return res.status(404).json({ message: "ไม่พบข้อมูลกิจกรรม" });
+    }
+
+    // 2. อัปเดตงานมอบหมายให้ผู้ใช้คนนี้
+    await query(
+      `UPDATE tasks 
+       SET user_id = $1, chairman = $2 
+       WHERE id = $3`,
+      [userId, userName, taskId]
+    );
+
+    // 3. ส่ง LINE แจ้งเตือนไปยังกลุ่มประชาสัมพันธ์/แอดมิน เพื่อบอกว่ามีคนรับงานแล้ว
+    try {
+      const acceptMessage = `✅ คุณ ${userName} ได้กดรับงานแล้ว!\n📝 เรื่อง: ${checkTask.rows[0].title}\n🚪 สถานที่: ${checkTask.rows[0].room}\n⏱️ เวลา: ${checkTask.rows[0].start_time ? checkTask.rows[0].start_time.slice(0, 5) : "08:30"} - ${checkTask.rows[0].end_time ? checkTask.rows[0].end_time.slice(0, 5) : "11:30"} น.`;
+      
+      await lineClient.pushMessage({
+        to: TARGET_GROUP_ID,
+        messages: [{ type: "text", text: acceptMessage }],
+      });
+    } catch (lineErr) {
+      console.error("LIFF accept job LINE notify error:", lineErr);
+    }
+
+    res.json({ message: "รับงานสำเร็จเรียบร้อยแล้ว!" });
+  } catch (error) {
+    console.error("Accept Job API Error:", error);
+    res.status(500).json({ message: "เกิดข้อผิดพลาดในการรับงาน" });
   }
 });
 
