@@ -417,8 +417,8 @@ export default function AdminDashboard() {
           <div>
             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">ระดับสิทธิ์ (Role)</label>
             <select id="swal-reg-role" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500">
-              <option value="user_n">USER_N (ผู้ใช้ทั่วไป)</option>
-              <option value="user_pr">USER_PR (ผู้ใช้ประชาสัมพันธ์)</option>
+              <option value="user_n">USER_N (Normal User / ผู้ใช้ทั่วไป)</option>
+              <option value="user_pr">USER_PR (Staff / ผู้ปฏิบัติงาน)</option>
               <option value="admin">ADMIN (ผู้ดูแลระบบ)</option>
             </select>
           </div>

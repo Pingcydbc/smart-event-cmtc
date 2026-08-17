@@ -224,9 +224,9 @@ export default function LiffPage() {
       case "admin":
         return <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Admin</span>;
       case "user_pr":
-        return <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">PR / ประชาสัมพันธ์</span>;
+        return <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Staff / ผู้ปฏิบัติงาน</span>;
       case "user_n":
-        return <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Staff / ผู้ปฏิบัติงาน</span>;
+        return <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Normal User / ผู้ใช้ทั่วไป</span>;
       default:
         return <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">{role}</span>;
     }
@@ -287,8 +287,8 @@ export default function LiffPage() {
 
           {/* รายการกิจกรรมสำหรับผู้ใช้งานนั้นๆ */}
           <div className="p-4 flex-1">
-            {/* ปุ่มเพิ่มงานสำหรับ normal user (PR / ประชาสัมพันธ์) และแอดมิน */}
-            {(user.role === "admin" || user.role === "user_pr") && (
+            {/* ปุ่มเพิ่มงานสำหรับ Normal User, Staff และ แอดมิน */}
+            {(user.role === "admin" || user.role === "user_pr" || user.role === "user_n") && (
               <div className="mb-5">
                 <Link
                   href="/form"
@@ -300,7 +300,7 @@ export default function LiffPage() {
             )}
 
             {/* แท็บสลับหน้างานสำหรับ Staff / ผู้ปฏิบัติงาน */}
-            {user.role === "user_n" && (
+            {user.role === "user_pr" && (
               <div className="flex bg-slate-200/60 p-1 rounded-xl mb-4 text-xs font-semibold">
                 <button
                   type="button"
@@ -330,14 +330,14 @@ export default function LiffPage() {
             {/* หัวข้อเรื่องและจำนวนกิจกรรม */}
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-sm font-bold text-slate-800">
-                {user.role === "admin" || user.role === "user_pr" 
+                {user.role === "admin" || user.role === "user_n" 
                   ? "📋 งานทั้งหมดในระบบ" 
                   : activeTab === "my" 
                     ? "🎖️ งานที่คุณได้รับมอบหมาย" 
                     : "📋 รายการงานทั้งหมดที่รับได้"}
               </h4>
               <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                {(user.role === "user_n" 
+                {(user.role === "user_pr" 
                   ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
                   : tasks
                 ).length} กิจกรรม
@@ -349,10 +349,10 @@ export default function LiffPage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                 <p className="text-xs text-slate-400 mt-2">กำลังดึงข้อมูลกิจกรรม...</p>
               </div>
-            ) : (user.role === "user_n" 
-                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
+            ) : (user.role === "user_pr" 
+                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks) 
                   : tasks
-                ).length === 0 ? (
+                 ).length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center shadow-[0_4px_20px_rgba(0,0,0,0.01)]">
                 <span className="text-3xl block mb-2">🎉</span>
                 <h5 className="text-xs font-bold text-slate-700">ไม่มีกิจกรรมนัดหมายในขณะนี้</h5>
@@ -360,7 +360,7 @@ export default function LiffPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {(user.role === "user_n" 
+                {(user.role === "user_pr" 
                   ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
                   : tasks
                 ).map((task) => (
@@ -395,8 +395,8 @@ export default function LiffPage() {
                       </div>
                     </div>
 
-                    {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_n) */}
-                    {user.role === "user_n" && (
+                    {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_pr) */}
+                    {user.role === "user_pr" && (
                       <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
                         {task.user_id === user.id ? (
                           <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
