@@ -453,7 +453,7 @@ router.get("/tasks", authenticateToken, async (req, res) => {
 
   try {
     let result;
-    if (userRole === "admin" || userRole === "user_pr" || showAll === "true") {
+    if (userRole === "admin" || userRole === "user_pr") {
       result = await query(`
         SELECT tasks.*, users.name as creator_name 
         FROM tasks 
