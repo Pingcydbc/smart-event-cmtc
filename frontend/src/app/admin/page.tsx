@@ -16,6 +16,7 @@ import {
   Eye,
   Edit3,
   UserPlus,
+  Settings,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -25,6 +26,7 @@ export default function AdminDashboard() {
   const [userName, setUserName] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [events, setEvents] = useState([]);
+  const [targetGroupId, setTargetGroupId] = useState("");
   const [activeTab, setActiveTab] = useState("events");
   const [loading, setLoading] = useState(true);
 
@@ -69,8 +71,16 @@ export default function AdminDashboard() {
       });
       const usersData = await usersRes.json();
 
+      const settingsRes = await fetch(`${API_URL}/api/admin/settings/target-group-id`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const settingsData = await settingsRes.json();
+
       if (eventsRes.ok) setEvents(eventsData);
       if (usersRes.ok) setUsers(usersData);
+      if (settingsRes.ok && settingsData.targetGroupId) {
+        setTargetGroupId(settingsData.targetGroupId);
+      }
     } catch (err) {
       console.error("Fetch admin data error:", err);
     } finally {
@@ -624,6 +634,12 @@ export default function AdminDashboard() {
             >
               <Users className="h-4 w-4" /> จัดการสมาชิก ({users.length})
             </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${activeTab === "settings" ? "bg-white text-red-600 shadow-sm font-semibold" : "text-gray-500 hover:text-gray-900"}`}
+            >
+              <Settings className="h-4 w-4" /> ตั้งค่ากลุ่ม LINE
+            </button>
           </div>
         </div>
 
@@ -829,6 +845,88 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ⚙️ แท็บที่ 3: ตั้งค่ากลุ่ม LINE */}
+        {activeTab === "settings" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="space-y-6"
+          >
+            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-[0_10px_30px_rgba(0,0,0,0.01)] max-w-xl">
+              <h2 className="text-lg font-bold text-gray-900 mb-2">
+                📢 ตั้งค่ากลุ่ม LINE สำหรับรับแจ้งเตือนกิจกรรม
+              </h2>
+              <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+                กรอกรหัส Group ID ของกลุ่มไลน์องค์กรของคุณ เพื่อให้บอทสามารถส่งข้อความ Flex Message แจ้งเตือนเวลาเพิ่มกิจกรรมหรือมอบหมายงานใหม่เข้าไปในกลุ่มได้
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                    LINE Group ID (รหัสห้องกลุ่มไลน์)
+                  </label>
+                  <input
+                    type="text"
+                    value={targetGroupId}
+                    onChange={(e) => setTargetGroupId(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-mono"
+                    placeholder="เช่น C31512452c1c75cde66ee035e2ee0e621"
+                  />
+                </div>
+
+                <button
+                  onClick={async () => {
+                    const token = localStorage.getItem("token");
+                    try {
+                      const res = await fetch(`${API_URL}/api/admin/settings/target-group-id`, {
+                        method: "PUT",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ targetGroupId }),
+                      });
+
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.message || "บันทึกข้อมูลล้มเหลว");
+
+                      Swal.fire({
+                        icon: "success",
+                        title: "บันทึกสำเร็จ",
+                        text: "อัปเดตรหัสกลุ่มไลน์เรียบร้อยแล้ว",
+                        timer: 1500,
+                        showConfirmButton: false,
+                      });
+                      fetchAdminData(token!);
+                    } catch (err: any) {
+                      Swal.fire({
+                        icon: "error",
+                        title: "เกิดข้อผิดพลาด",
+                        text: err.message,
+                        confirmButtonColor: "#dc2626",
+                      });
+                    }
+                  }}
+                  className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-red-100 hover:shadow-lg"
+                >
+                  บันทึกรหัสกลุ่มไลน์
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 max-w-xl">
+              <h3 className="text-amber-800 font-bold text-xs uppercase tracking-wider mb-2">
+                💡 วิธีค้นหารหัส LINE Group ID (รหัสกลุ่ม)
+              </h3>
+              <ol className="text-xs text-amber-700 space-y-2 list-decimal list-inside">
+                <li>เชิญบอทไลน์ของระบบเข้าร่วมกลุ่มที่ต้องการให้แจ้งเตือน</li>
+                <li>พิมพ์ข้อความคำว่า <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">id</code> ในห้องแชทกลุ่มไลน์นั้น</li>
+                <li>บอทจะตอบกลับแสดงรหัส Group ID (ขึ้นต้นด้วยตัว <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">C</code>) ให้คัดลอกรหัสนั้นมาใส่ในช่องตั้งค่าด้านบน</li>
+              </ol>
             </div>
           </motion.div>
         )}

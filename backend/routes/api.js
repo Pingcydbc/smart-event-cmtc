@@ -9,8 +9,23 @@ import { messagingApi } from "@line/bot-sdk";
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey123";
 
-// รหัส Group ID ของคุณที่ดึงได้จาก Terminal
-const TARGET_GROUP_ID = "C31512452c1c75cde66ee035e2ee0e621";
+const { MessagingApiClient } = messagingApi;
+const lineClient = new MessagingApiClient({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "dummy_token",
+});
+
+// ฟังก์ชันช่วยดึง Group ID ไดนามิกจากฐานข้อมูล Supabase
+async function getTargetGroupId() {
+  try {
+    const result = await query("SELECT value FROM system_settings WHERE key = 'target_group_id'");
+    if (result.rows.length > 0) {
+      return result.rows[0].value;
+    }
+  } catch (error) {
+    console.error("Error reading target_group_id from database:", error.message);
+  }
+  return "C31512452c1c75cde66ee035e2ee0e621"; // ค่าดั้งเดิมสำรอง
+}
 
 // ==========================================
 // 👑 Middleware ตรวจสอบสิทธิ์ว่าผู้ใช้รายนี้คือ Admin หรือไม่
@@ -503,8 +518,9 @@ router.post("/tasks/:id/accept", authenticateToken, async (req, res) => {
     try {
       const acceptMessage = `✅ คุณ ${userName} ได้กดรับงานแล้ว!\n📝 เรื่อง: ${checkTask.rows[0].title}\n🚪 สถานที่: ${checkTask.rows[0].room}\n⏱️ เวลา: ${checkTask.rows[0].start_time ? checkTask.rows[0].start_time.slice(0, 5) : "08:30"} - ${checkTask.rows[0].end_time ? checkTask.rows[0].end_time.slice(0, 5) : "11:30"} น.`;
       
+      const targetGroupId = await getTargetGroupId();
       await lineClient.pushMessage({
-        to: TARGET_GROUP_ID,
+        to: targetGroupId,
         messages: [{ type: "text", text: acceptMessage }],
       });
     } catch (lineErr) {
@@ -558,12 +574,21 @@ router.post("/tasks", authenticateToken, async (req, res) => {
 
     // 🟢 สเต็ปที่ 3: แอบยิง LINE แจ้งเตือนเยื้องหลังแบบเงียบ ๆ (จับแยกห้องขังเพื่อไม่ให้มาขัดขวางป๊อปอัพหน้าเว็บ)
     try {
+      const taskObj = result.rows[0];
+      // แปลงวันที่ให้อยู่ในฟอร์แมต YYYY-MM-DD เสมอ เพื่อส่งให้ Line Flex Message
+      const formattedDateStr = taskObj.date instanceof Date 
+        ? taskObj.date.toISOString().split('T')[0] 
+        : typeof taskObj.date === 'string' 
+          ? taskObj.date.split('T')[0] 
+          : date;
+
+      const targetGroupId = await getTargetGroupId();
       await lineClient.pushMessage({
-        to: TARGET_GROUP_ID,
+        to: targetGroupId,
         messages: [
           createFlexNotification(
             category,
-            date,
+            formattedDateStr,
             title,
             chairman,
             room,
@@ -571,7 +596,7 @@ router.post("/tasks", authenticateToken, async (req, res) => {
             endTime,
             description,
             bannerUrl,
-            result.rows[0].id, // 💡 ส่งรหัส ID กิจกรรมไปสร้างปุ่มมอบหมายผ่าน LIFF
+            taskObj.id, // 💡 ส่งรหัส ID กิจกรรมไปสร้างปุ่มมอบหมายผ่าน LIFF
           ),
         ],
       });
@@ -619,8 +644,9 @@ router.delete("/tasks/:id", authenticateToken, async (req, res) => {
     // แอบยิงไลน์ข้างหลัง
     try {
       const deleteMessage = `❌ มีการยกเลิก/ลบกิจกรรม!\n📝 เรื่อง: ${deletedTaskTitle}\n👤 ลบโดย: ${userName} ${userRole === "admin" ? "(Admin)" : ""}`;
+      const targetGroupId = await getTargetGroupId();
       await lineClient.pushMessage({
-        to: TARGET_GROUP_ID,
+        to: targetGroupId,
         messages: [{ type: "text", text: deleteMessage }],
       });
     } catch (le) {
@@ -750,8 +776,9 @@ router.patch(
         } else {
           // หากยังไม่เชื่อมต่อบัญชี ให้แจ้งเตือนลงกลุ่มพนักงานพร้อมหมายเหตุบอกแอดมิน
           const groupFallbackMessage = `🎖️ แอดมินมอบหมายงานใหม่!\n📝 เรื่อง: ${oldTaskTitle}\n👤 ผู้รับผิดชอบ: ${targetUserName}\n(หมายเหตุ: พนักงานคนนี้ยังไม่ได้เชื่อมต่อบัญชี LINE ส่วนตัว)`;
+          const targetGroupId = await getTargetGroupId();
           await lineClient.pushMessage({
-            to: TARGET_GROUP_ID,
+            to: targetGroupId,
             messages: [{ type: "text", text: groupFallbackMessage }],
           });
         }
@@ -797,6 +824,38 @@ router.delete(
   },
 );
 
+// ดึงรหัสกลุ่มไลน์ปัจจุบัน (Admin เท่านั้น)
+router.get("/admin/settings/target-group-id", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const targetGroupId = await getTargetGroupId();
+    res.json({ targetGroupId });
+  } catch (error) {
+    res.status(500).json({ message: "ดึงข้อมูลตั้งค่ารหัสกลุ่มไลน์ล้มเหลว" });
+  }
+});
+
+// บันทึก/อัปเดตข้อมูลรหัสกลุ่มไลน์เป้าหมาย (Admin เท่านั้น)
+router.put("/admin/settings/target-group-id", authenticateToken, isAdmin, async (req, res) => {
+  const { targetGroupId } = req.body;
+  if (!targetGroupId || targetGroupId.trim() === "") {
+    return res.status(400).json({ message: "กรุณาระบุรหัสกลุ่มไลน์เป้าหมาย" });
+  }
+
+  try {
+    await query(
+      `INSERT INTO system_settings (key, value)
+       VALUES ('target_group_id', $1)
+       ON CONFLICT (key)
+       DO UPDATE SET value = EXCLUDED.value`,
+      [targetGroupId.trim()]
+    );
+    res.json({ message: "อัปเดตรหัสกลุ่มไลน์เป้าหมายสำเร็จ" });
+  } catch (error) {
+    console.error("Update target group id error:", error);
+    res.status(500).json({ message: "อัปเดตรหัสกลุ่มไลน์เป้าหมายล้มเหลว" });
+  }
+});
+
 // อัปเดตสิทธิ์สมาชิก (Admin เท่านั้น)
 router.put(
   "/admin/users/:id/role",
@@ -832,10 +891,7 @@ router.put(
   }
 );
 
-const { MessagingApiClient } = messagingApi;
-const lineClient = new MessagingApiClient({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "dummy_token",
-});
+
 
 router.post("/webhook", async (req, res) => {
   try {
@@ -1116,8 +1172,9 @@ router.post("/liff/assign", async (req, res) => {
         });
       } else {
         // หากคนรับงานไม่มี LINE ให้พ่นบอกในกลุ่มแอดมินส่วนกลาง
+        const targetGroupId = await getTargetGroupId();
         await lineClient.pushMessage({
-          to: TARGET_GROUP_ID,
+          to: targetGroupId,
           messages: [{ type: "text", text: `📢 กิจกรรม "${oldTaskTitle}" ถูกมอบหมายให้คุณ ${targetUserName} แล้ว\n(หมายเหตุ: พนักงานยังไม่ได้เชื่อมต่อไลน์ส่วนตัว)` }],
         });
       }

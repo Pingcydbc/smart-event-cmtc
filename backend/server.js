@@ -20,6 +20,22 @@ app.use('/api', apiRoutes);
 try {
   console.log("Checking database schema updates...");
   await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(255);");
+  
+  // สร้างตารางสำหรับเก็บตั้งค่าระบบ เช่น LINE Group ID
+  await query(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key VARCHAR(255) PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+  
+  // ใส่ค่า Default สำหรับ LINE Group ID หากยังไม่มีในระบบ
+  await query(`
+    INSERT INTO system_settings (key, value)
+    VALUES ('target_group_id', 'C31512452c1c75cde66ee035e2ee0e621')
+    ON CONFLICT (key) DO NOTHING;
+  `);
+
   console.log("Database schema checked and updated successfully.");
 } catch (dbErr) {
   console.error("Database migration check failed:", dbErr.message);
@@ -50,8 +66,16 @@ cron.schedule("0 8 * * *", async () => {
       [todayStr]
     );
 
-    // รหัสเป้าหมายกลุ่ม LINE ของคุณ
-    const targetGroupId = "C31512452c1c75cde66ee035e2ee0e621";
+    // ดึงรหัสเป้าหมายกลุ่ม LINE แบบไดนามิกจากฐานข้อมูล
+    let targetGroupId = "C31512452c1c75cde66ee035e2ee0e621";
+    try {
+      const settingsRes = await query("SELECT value FROM system_settings WHERE key = 'target_group_id'");
+      if (settingsRes.rows.length > 0) {
+        targetGroupId = settingsRes.rows[0].value;
+      }
+    } catch (settErr) {
+      console.error("Failed to fetch targetGroupId for cron job:", settErr.message);
+    }
 
     if (result.rows.length === 0) {
       // เคสที่ 1: วันนี้ไม่มีนัดหมายกิจกรรมใดๆ ในระบบเลย
