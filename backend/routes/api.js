@@ -567,21 +567,16 @@ router.post("/tasks", authenticateToken, async (req, res) => {
       ],
     );
 
-    // 🟢 สเต็ปที่ 2: ทำการตอบกลับหาหน้าบ้านทันทีว่าสำเร็จ! (Next.js ได้รับตรงนี้ปุ๊บ จะเด้งป๊อปอัพสีเขียวหล่อ ๆ เลยครับ)
-    res
-      .status(201)
-      .json({ message: "บันทึกกิจกรรมสำเร็จ", task: result.rows[0] });
+    // 🟢 สเต็ปที่ 2: แปลงวันที่ให้อยู่ในฟอร์แมต YYYY-MM-DD เสมอ เพื่อส่งให้ Line Flex Message
+    const taskObj = result.rows[0];
+    const formattedDateStr = taskObj.date instanceof Date 
+      ? taskObj.date.toISOString().split('T')[0] 
+      : typeof taskObj.date === 'string' 
+        ? taskObj.date.split('T')[0] 
+        : date;
 
-    // 🟢 สเต็ปที่ 3: แอบยิง LINE แจ้งเตือนเยื้องหลังแบบเงียบ ๆ (จับแยกห้องขังเพื่อไม่ให้มาขัดขวางป๊อปอัพหน้าเว็บ)
+    // 🟢 สเต็ปที่ 3: ส่ง LINE แจ้งเตือนเข้าห้องกลุ่มไลน์ (ต้อง Await เพื่อรอส่งให้เสร็จก่อนจบฟังก์ชันบน Vercel)
     try {
-      const taskObj = result.rows[0];
-      // แปลงวันที่ให้อยู่ในฟอร์แมต YYYY-MM-DD เสมอ เพื่อส่งให้ Line Flex Message
-      const formattedDateStr = taskObj.date instanceof Date 
-        ? taskObj.date.toISOString().split('T')[0] 
-        : typeof taskObj.date === 'string' 
-          ? taskObj.date.split('T')[0] 
-          : date;
-
       const targetGroupId = await getTargetGroupId();
       await lineClient.pushMessage({
         to: targetGroupId,
@@ -600,14 +595,19 @@ router.post("/tasks", authenticateToken, async (req, res) => {
           ),
         ],
       });
+      console.log(`🟢 LINE Notification sent successfully to group ${targetGroupId}`);
     } catch (lineError) {
-      // ดึงรายละเอียดความผิดพลาดจาก LINE API ออกมาให้ครบถ้วนเพื่อวิเคราะห์ปัญหา
       console.error(
         "⚠️ LINE Notification failed but data was saved safely. Details:",
         lineError.message,
         lineError.response ? JSON.stringify(lineError.response.data || lineError.response) : ""
       );
     }
+
+    // 🟢 สเต็ปที่ 4: ทำการตอบกลับหาหน้าบ้าน ( Next.js ได้รับตรงนี้จะแสดงป๊อปอัพสำเร็จ )
+    res
+      .status(201)
+      .json({ message: "บันทึกกิจกรรมสำเร็จ", task: result.rows[0] });
   } catch (error) {
     console.error(error);
     // ป้องกันการยิงซ้ำถ้ามีการตอบกลับไปแล้ว
