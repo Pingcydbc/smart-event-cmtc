@@ -797,6 +797,41 @@ router.delete(
   },
 );
 
+// อัปเดตสิทธิ์สมาชิก (Admin เท่านั้น)
+router.put(
+  "/admin/users/:id/role",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!role || !["admin", "staff", "user_pr", "user_n"].includes(role)) {
+      return res.status(400).json({ message: "ระดับสิทธิ์ไม่ถูกต้อง" });
+    }
+
+    try {
+      if (parseInt(id) === req.user.id) {
+        return res.status(400).json({ message: "ไม่สามารถเปลี่ยนสิทธิ์ของตนเองได้" });
+      }
+
+      const result = await query(
+        "UPDATE users SET role = $1 WHERE id = $2 RETURNING id, name, email, role",
+        [role, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "ไม่พบผู้ใช้ที่ต้องการแก้ไข" });
+      }
+
+      res.json({ message: "อัปเดตสิทธิ์ผู้ใช้สำเร็จ", user: result.rows[0] });
+    } catch (error) {
+      console.error("Update role error:", error);
+      res.status(500).json({ message: "เกิดข้อผิดพลาดในการอัปเดตสิทธิ์" });
+    }
+  }
+);
+
 const { MessagingApiClient } = messagingApi;
 const lineClient = new MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "dummy_token",

@@ -357,6 +357,84 @@ export default function AdminDashboard() {
     });
   };
 
+  // 👤 7.5 ฟังก์ชันแก้ไขระดับสิทธิ์สมาชิก (Role)
+  const handleEditRole = async (userId: number, name: string, currentRole: string) => {
+    const token = localStorage.getItem("token");
+    const loggedInUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+    if (userId === loggedInUser.id) {
+      Swal.fire({
+        icon: "warning",
+        title: "ดำเนินการไม่ได้",
+        text: "คุณไม่สามารถเปลี่ยนสิทธิ์ของตนเองได้ครับน้า",
+        confirmButtonColor: "#dc2626",
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: `✏️ แก้ไขระดับสิทธิ์ของ ${name}`,
+      html: `
+        <div class="text-left space-y-3 pt-3 text-sm bg-white" id="edit-role-form">
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">ระดับสิทธิ์ (Role)</label>
+            <select id="swal-edit-role" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500">
+              <option value="user_n" ${currentRole === "user_n" ? "selected" : ""}>USER_N (Normal User / ผู้ใช้ทั่วไป)</option>
+              <option value="user_pr" ${currentRole === "user_pr" ? "selected" : ""}>USER_PR (Staff / ผู้ปฏิบัติงาน)</option>
+              <option value="admin" ${currentRole === "admin" ? "selected" : ""}>ADMIN (ผู้ดูแลระบบ)</option>
+            </select>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#4b5563",
+      confirmButtonText: "บันทึกการเปลี่ยนแปลง",
+      cancelButtonText: "ยกเลิก",
+      customClass: {
+        popup: "rounded-2xl",
+        cancelButton:
+          "border border-gray-200 text-gray-700 font-medium px-4 py-2",
+      },
+      preConfirm: () => {
+        const role = (document.getElementById("swal-edit-role") as HTMLSelectElement).value;
+        return { role };
+      },
+    }).then(async (result) => {
+      if (result.isConfirmed && result.value) {
+        try {
+          const res = await fetch(`${API_URL}/api/admin/users/${userId}/role`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(result.value),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "แก้ไขระดับสิทธิ์ไม่สำเร็จ");
+
+          Swal.fire({
+            icon: "success",
+            title: "อัปเดตสิทธิ์สำเร็จ!",
+            text: `เปลี่ยนระดับสิทธิ์ของ ${name} เรียบร้อยแล้ว`,
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          fetchAdminData(token!);
+        } catch (err: any) {
+          Swal.fire({
+            icon: "error",
+            title: "ล้มเหลว",
+            text: err.message,
+            confirmButtonColor: "#dc2626",
+          });
+        }
+      }
+    });
+  };
+
   // ❌ 7. ฟังก์ชันแอดมินสั่งลบบัญชีสมาชิก
   const handleDeleteUser = async (id: number, name: string) => {
     const token = localStorage.getItem("token");
@@ -699,7 +777,7 @@ export default function AdminDashboard() {
                       <th className="px-6 py-4">ชื่อพนักงาน / สมาชิก</th>
                       <th className="px-6 py-4">อีเมลบัญชี</th>
                       <th className="px-6 py-4">ระดับสิทธิ์ (Role)</th>
-                      <th className="px-6 py-4 text-center">เตะออกจากระบบ</th>
+                      <th className="px-6 py-4 text-center">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 text-gray-700">
@@ -715,13 +793,22 @@ export default function AdminDashboard() {
                           {user.email}
                         </td>
                         <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${user.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}
-                          >
-                            {user.role === "admin"
-                              ? "👑 Administrator"
-                              : `👤 ${user.role.toUpperCase()}`}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${user.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}
+                            >
+                              {user.role === "admin"
+                                ? "👑 Administrator"
+                                : `👤 ${user.role.toUpperCase()}`}
+                            </span>
+                            <button
+                              onClick={() => handleEditRole(user.id, user.name, user.role)}
+                              className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                              title="แก้ไขระดับสิทธิ์"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <button
