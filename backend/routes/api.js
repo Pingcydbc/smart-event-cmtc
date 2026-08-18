@@ -981,8 +981,9 @@ router.post("/webhook", async (req, res) => {
             });
 
             // 2. ส่งแจ้งเตือนเข้ากลุ่ม Admin (แบบที่ 2)
+            const targetGroupId = await getTargetGroupId();
             await lineClient.pushMessage({
-              to: TARGET_GROUP_ID,
+              to: targetGroupId,
               messages: [{ 
                 type: "text", 
                 text: `⚠️ แจ้งเตือน: มีสมาชิกต้องการติดต่อแอดมิน!\n👤 User ID: ${userId}\n\n(แอดมินสามารถตอบกลับผ่านหน้าเว็บ Manager หรือระบบแชทได้เลยครับ)` 
