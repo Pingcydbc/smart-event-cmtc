@@ -35,13 +35,20 @@ function getBangkokTodayStr() {
 // ฟังก์ชันแกะสตริง YYYY-MM-DD จาก Date Object หรือ String อย่างปลอดภัย
 function getIsoDateStr(dateInput) {
   if (!dateInput) return "";
-  if (dateInput instanceof Date) {
-    return dateInput.toISOString().split('T')[0];
+  try {
+    if (typeof dateInput === 'string') {
+      return dateInput.split('T')[0].trim();
+    }
+    if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+      const year = dateInput.getFullYear();
+      const month = String(dateInput.getMonth() + 1).padStart(2, '0');
+      const day = String(dateInput.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return String(dateInput).split('T')[0].trim();
+  } catch (e) {
+    return String(dateInput);
   }
-  if (typeof dateInput === 'string') {
-    return dateInput.split('T')[0];
-  }
-  return String(dateInput).split('T')[0];
 }
 
 // ==========================================
@@ -1089,12 +1096,21 @@ router.post("/webhook", async (req, res) => {
             const todayStr = getBangkokTodayStr();
             console.log(`🔍 Webhook checking tasks for today (Bangkok): ${todayStr}`);
 
-            const result = await query(
-              "SELECT * FROM tasks WHERE date::text LIKE $1 || '%' OR date = $1 ORDER BY start_time ASC NULLS LAST, created_at ASC",
-              [todayStr]
-            );
+            let result;
+            try {
+              result = await query(
+                "SELECT * FROM tasks WHERE date::text LIKE $1 || '%' ORDER BY start_time ASC NULLS LAST, id ASC",
+                [todayStr]
+              );
+            } catch (sqlErr) {
+              console.warn("Primary date query with date::text failed, attempting fallback query:", sqlErr.message);
+              result = await query(
+                "SELECT * FROM tasks WHERE date::text = $1 ORDER BY id ASC",
+                [todayStr]
+              );
+            }
 
-            if (result.rows.length === 0) {
+            if (!result || result.rows.length === 0) {
               await lineClient.replyMessage({
                 replyToken,
                 messages: [{
@@ -1106,20 +1122,20 @@ router.post("/webhook", async (req, res) => {
               // 🎨 สร้าง Flex Message Bubble สำหรับแต่ละกิจกรรม (จำกัดไม่เกิน 10 bubbles ตามข้อกำหนด LINE Carousel)
               const maxTasks = result.rows.slice(0, 10);
               const bubbles = maxTasks.map(task => {
-                const dateStr = getIsoDateStr(task.date);
+                const dateStr = getIsoDateStr(task.date) || todayStr;
                 const startTime = task.start_time ? String(task.start_time).slice(0, 5) : "";
                 const endTime = task.end_time ? String(task.end_time).slice(0, 5) : "";
 
                 const flex = createFlexNotification(
-                  task.category,
+                  task.category || "กิจกรรม",
                   dateStr,
-                  task.title,
-                  task.chairman,
-                  task.room,
+                  task.title || "กิจกรรม",
+                  task.chairman || "ไม่ระบุ",
+                  task.room || "ไม่ระบุ",
                   startTime,
                   endTime,
-                  task.description,
-                  task.banner_url,
+                  task.description || "",
+                  task.banner_url || null,
                   task.id
                 );
                 return flex.contents;
@@ -1149,10 +1165,22 @@ router.post("/webhook", async (req, res) => {
                                   `👤 ผู้รับผิดชอบ: ${task.chairman || "-"}\n` +
                                   `-----------------------\n`;
                 });
-                await lineClient.replyMessage({
-                  replyToken,
-                  messages: [{ type: "text", text: fallbackText }]
-                });
+                
+                const targetTo = event.source.groupId || event.source.userId;
+                try {
+                  await lineClient.replyMessage({
+                    replyToken,
+                    messages: [{ type: "text", text: fallbackText }]
+                  });
+                } catch (replyAgainErr) {
+                  // หาก replyToken ถูกใช้ไปแล้ว ให้ส่งแบบ pushMessage แทน
+                  if (targetTo) {
+                    await lineClient.pushMessage({
+                      to: targetTo,
+                      messages: [{ type: "text", text: fallbackText }]
+                    });
+                  }
+                }
               }
             }
           } catch (error) {
@@ -1163,7 +1191,7 @@ router.post("/webhook", async (req, res) => {
                 messages: [{ type: "text", text: "⚠️ เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม กรุณาลองใหม่อีกครั้งครับ" }]
               });
             } catch (err2) {
-              console.error("Send error reply failed:", err2);
+              console.error("Send error reply failed:", err2.message);
             }
           }
         }

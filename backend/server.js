@@ -66,7 +66,7 @@ cron.schedule("0 8 * * *", async () => {
     
     // ยิงคำสั่ง SQL ไปดึงกิจกรรมเฉพาะของวันนี้
     const result = await query(
-      "SELECT * FROM tasks WHERE date::text LIKE $1 || '%' OR date = $1 ORDER BY start_time ASC NULLS LAST, created_at ASC", 
+      "SELECT * FROM tasks WHERE date::text LIKE $1 || '%' ORDER BY start_time ASC NULLS LAST, id ASC", 
       [todayStr]
     );
 
