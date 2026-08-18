@@ -601,10 +601,11 @@ router.post("/tasks", authenticateToken, async (req, res) => {
         ],
       });
     } catch (lineError) {
-      // ถ้ารหัสไลน์พังหรือติด 401 ให้พ่นบ่นแค่ใน Logs หลังบ้านพอ หน้าเว็บจริงจะไม่ระเบิดแล้วครับน้า
+      // ดึงรายละเอียดความผิดพลาดจาก LINE API ออกมาให้ครบถ้วนเพื่อวิเคราะห์ปัญหา
       console.error(
-        "⚠️ LINE Notification failed but data was saved safely:",
+        "⚠️ LINE Notification failed but data was saved safely. Details:",
         lineError.message,
+        lineError.response ? JSON.stringify(lineError.response.data || lineError.response) : ""
       );
     }
   } catch (error) {
