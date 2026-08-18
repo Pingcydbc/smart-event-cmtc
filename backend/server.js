@@ -15,6 +15,8 @@ app.use(express.json());
 
 // เรียกใช้งานเส้นทาง API ทั้งหมดโดยจะเริ่มต้นด้วย /api เช่น /api/tasks
 app.use('/api', apiRoutes);
+// รองรับเส้นทางรากโดยตรง เช่น /webhook เผื่อใน LINE Developers ตั้งค่าเป็น /webhook
+app.use('/', apiRoutes);
 
 // ตรวจสอบและอัปเดตตารางฐานข้อมูลอัตโนมัติเมื่อเปิดเซิร์ฟเวอร์
 try {
@@ -28,13 +30,15 @@ try {
       value TEXT NOT NULL
     );
   `);
-  
-  // ใส่ค่า Default สำหรับ LINE Group ID หากยังไม่มีในระบบ
-  await query(`
-    INSERT INTO system_settings (key, value)
-    VALUES ('target_group_id', 'C31512452c1c75cde66ee035e2ee0e621')
-    ON CONFLICT (key) DO NOTHING;
-  `);
+
+  // ตรวจสอบว่ามี target_group_id หรือยัง ถ้ามี LINE_GROUP_ID ใน .env ให้นำมาใช้
+  if (process.env.LINE_GROUP_ID) {
+    await query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('target_group_id', $1)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    `, [process.env.LINE_GROUP_ID.trim()]);
+  }
 
   console.log("Database schema checked and updated successfully.");
 } catch (dbErr) {
@@ -46,35 +50,40 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================
-// ⏱️ ข้อ 3: ระบบตั้งเวลาส่งสรุปกิจกรรมเข้ากลุ่ม LINE อัตโนมัติ "ทุกวัน เวลา 08:00 น."
+// ⏱️ ระบบตั้งเวลาส่งสรุปกิจกรรมเข้ากลุ่ม LINE อัตโนมัติ "ทุกวัน เวลา 08:00 น. (เวลาไทย)"
 // ==========================================
 const { MessagingApiClient } = messagingApi;
 const lineClientForCron = new MessagingApiClient({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "dummy_token"
 });
 
 cron.schedule("0 8 * * *", async () => {
-  console.log("⏱️ เริ่มต้นฟังก์ชันตรวจสอบและสรุปกิจกรรมประจำวันอัตโนมัติ...");
+  console.log("⏱️ [CRON 08:00] เริ่มต้นฟังก์ชันตรวจสอบและสรุปกิจกรรมประจำวันอัตโนมัติ...");
   
   try {
-    // ดึงวันที่ปัจจุบันมาจัดฟอร์แมตเป็น ปี-เดือน-วัน (YYYY-MM-DD)
-    const todayStr = new Date().toISOString().split('T')[0]; 
+    // ดึงวันที่ปัจจุบันตามเวลาประเทศไทย (Asia/Bangkok) ในรูปแบบ YYYY-MM-DD
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
     
-    // ยิงคำสั่ง SQL ไปดึงกิจกรรมเฉพาะของวันนี้ขึ้นมาเรียงลำดับเวลาสร้าง
+    // ยิงคำสั่ง SQL ไปดึงกิจกรรมเฉพาะของวันนี้
     const result = await query(
-      "SELECT * FROM tasks WHERE date = $1 ORDER BY created_at ASC", 
+      "SELECT * FROM tasks WHERE date::text LIKE $1 || '%' OR date = $1 ORDER BY start_time ASC NULLS LAST, created_at ASC", 
       [todayStr]
     );
 
-    // ดึงรหัสเป้าหมายกลุ่ม LINE แบบไดนามิกจากฐานข้อมูล
-    let targetGroupId = "C31512452c1c75cde66ee035e2ee0e621";
+    // ดึงรหัสเป้าหมายกลุ่ม LINE จากฐานข้อมูล หรือ .env
+    let targetGroupId = process.env.LINE_GROUP_ID || "";
     try {
       const settingsRes = await query("SELECT value FROM system_settings WHERE key = 'target_group_id'");
-      if (settingsRes.rows.length > 0) {
-        targetGroupId = settingsRes.rows[0].value;
+      if (settingsRes.rows.length > 0 && settingsRes.rows[0].value) {
+        targetGroupId = settingsRes.rows[0].value.trim();
       }
     } catch (settErr) {
       console.error("Failed to fetch targetGroupId for cron job:", settErr.message);
+    }
+
+    if (!targetGroupId) {
+      console.warn("⚠️ Cron: No target_group_id configured, skipping LINE push.");
+      return;
     }
 
     if (result.rows.length === 0) {
@@ -83,18 +92,19 @@ cron.schedule("0 8 * * *", async () => {
         to: targetGroupId,
         messages: [{ 
           type: 'text', 
-          text: `☀️ สวัสดีตอนเช้าครับทุกคน\n📅 วันนี้ไม่มีกิจกรรมนัดหมายใด ๆ ครับ ขอให้เป็นวันที่ดีสำหรับการทำงานครับ! ✨` 
+          text: `☀️ สวัสดีตอนเช้าครับทุกคน\n📅 วันนี้ (${todayStr}) ไม่มีกิจกรรมนัดหมายในระบบครับ ขอให้เป็นวันที่ดีสำหรับการทำงานครับ! ✨` 
         }]
       });
     } else {
-      // เคสที่ 2: วันนี้มีงาน รวบรวมข้อมูลทั้งหมดพิมพ์สรุปรายงานส่งเข้าไปในกล่องข้อความทีเดียว
-      let reportText = `☀️ สวัสดีตอนเช้าครับทุกคน!\n📅 สรุปข้อมูลกิจกรรมประจำวันนี้ครับ (${todayStr})\n\n`;
+      // เคสที่ 2: วันนี้มีงาน รวบรวมข้อมูลทั้งหมดพิมพ์สรุปรายงาน
+      let reportText = `☀️ สวัสดีตอนเช้าครับทุกคน!\n📅 สรุปข้อมูลกิจกรรมประจำวันนี้ (${todayStr})\n\n`;
       
       result.rows.forEach((task, index) => {
-        // 💡 ปรับปรุงคำศัพท์ใหม่เป็น "สถานที่" และ "ผู้รับผิดชอบ" เรียบร้อยแล้ว
+        const timeDisplay = task.start_time ? `${String(task.start_time).slice(0, 5)} น.` : "ไม่ระบุเวลา";
         reportText += `${index + 1}. 📝 เรื่อง: ${task.title}\n` +
-                      `🚪 สถานที่: ${task.room}\n` +
-                      `👤 ผู้รับผิดชอบ: ${task.chairman}\n` +
+                      `⏰ เวลา: ${timeDisplay}\n` +
+                      `🚪 สถานที่: ${task.room || "-"}\n` +
+                      `👤 ผู้รับผิดชอบ: ${task.chairman || "-"}\n` +
                       `-----------------------\n`;
       });
       
@@ -108,6 +118,8 @@ cron.schedule("0 8 * * *", async () => {
   } catch (error) {
     console.error("Cron Job Error:", error);
   }
+}, {
+  timezone: "Asia/Bangkok"
 });
 
 // ==========================================

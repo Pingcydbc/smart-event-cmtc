@@ -17,6 +17,8 @@ import {
   Edit3,
   UserPlus,
   Settings,
+  Send,
+  Bell,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -878,43 +880,89 @@ export default function AdminDashboard() {
                   />
                 </div>
 
-                <button
-                  onClick={async () => {
-                    const token = localStorage.getItem("token");
-                    try {
-                      const res = await fetch(`${API_URL}/api/admin/settings/target-group-id`, {
-                        method: "PUT",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({ targetGroupId }),
-                      });
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={async () => {
+                      const token = localStorage.getItem("token");
+                      try {
+                        const res = await fetch(`${API_URL}/api/admin/settings/target-group-id`, {
+                          method: "PUT",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({ targetGroupId }),
+                        });
 
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.message || "บันทึกข้อมูลล้มเหลว");
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.message || "บันทึกข้อมูลล้มเหลว");
 
-                      Swal.fire({
-                        icon: "success",
-                        title: "บันทึกสำเร็จ",
-                        text: "อัปเดตรหัสกลุ่มไลน์เรียบร้อยแล้ว",
-                        timer: 1500,
-                        showConfirmButton: false,
-                      });
-                      fetchAdminData(token!);
-                    } catch (err: any) {
-                      Swal.fire({
-                        icon: "error",
-                        title: "เกิดข้อผิดพลาด",
-                        text: err.message,
-                        confirmButtonColor: "#dc2626",
-                      });
-                    }
-                  }}
-                  className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-red-100 hover:shadow-lg"
-                >
-                  บันทึกรหัสกลุ่มไลน์
-                </button>
+                        Swal.fire({
+                          icon: "success",
+                          title: "บันทึกสำเร็จ",
+                          text: "อัปเดตรหัสกลุ่มไลน์เรียบร้อยแล้ว",
+                          timer: 1500,
+                          showConfirmButton: false,
+                        });
+                        fetchAdminData(token!);
+                      } catch (err: any) {
+                        Swal.fire({
+                          icon: "error",
+                          title: "เกิดข้อผิดพลาด",
+                          text: err.message,
+                          confirmButtonColor: "#dc2626",
+                        });
+                      }
+                    }}
+                    className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-red-100 hover:shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    บันทึกรหัสกลุ่มไลน์
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      const token = localStorage.getItem("token");
+                      try {
+                        Swal.fire({
+                          title: "กำลังส่งข้อความทดสอบ...",
+                          text: "กรุณารอสักครู่",
+                          allowOutsideClick: false,
+                          didOpen: () => Swal.showLoading(),
+                        });
+
+                        const res = await fetch(`${API_URL}/api/admin/settings/test-line-notification`, {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                          },
+                        });
+
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.message || "ส่งข้อความทดสอบล้มเหลว");
+
+                        Swal.fire({
+                          icon: "success",
+                          title: "ส่งข้อความสำเร็จ!",
+                          text: data.message,
+                          confirmButtonColor: "#16a34a",
+                        });
+                      } catch (err: any) {
+                        Swal.fire({
+                          icon: "error",
+                          title: "ส่งข้อความไม่สำเร็จ",
+                          text: err.message,
+                          confirmButtonColor: "#dc2626",
+                        });
+                      }
+                    }}
+                    className="py-3 px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2 border border-gray-200"
+                  >
+                    <Bell className="h-4 w-4 text-gray-500" />
+                    ทดสอบส่งข้อความเข้ากลุ่ม
+                  </button>
+                </div>
               </div>
             </div>
 

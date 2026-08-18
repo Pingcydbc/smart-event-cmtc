@@ -14,17 +14,34 @@ const lineClient = new MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "dummy_token",
 });
 
-// ฟังก์ชันช่วยดึง Group ID ไดนามิกจากฐานข้อมูล Supabase
+// ฟังก์ชันช่วยดึง Group ID ไดนามิกจากฐานข้อมูล Supabase หรือ .env
 async function getTargetGroupId() {
   try {
     const result = await query("SELECT value FROM system_settings WHERE key = 'target_group_id'");
-    if (result.rows.length > 0) {
-      return result.rows[0].value;
+    if (result.rows.length > 0 && result.rows[0].value && result.rows[0].value.trim() !== "") {
+      return result.rows[0].value.trim();
     }
   } catch (error) {
     console.error("Error reading target_group_id from database:", error.message);
   }
-  return "C31512452c1c75cde66ee035e2ee0e621"; // ค่าดั้งเดิมสำรอง
+  return (process.env.LINE_GROUP_ID || "").trim();
+}
+
+// ฟังก์ชันแปลงวันที่ปัจจุบันเป็น YYYY-MM-DD ตามเขตเวลาประเทศไทย (Asia/Bangkok)
+function getBangkokTodayStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+}
+
+// ฟังก์ชันแกะสตริง YYYY-MM-DD จาก Date Object หรือ String อย่างปลอดภัย
+function getIsoDateStr(dateInput) {
+  if (!dateInput) return "";
+  if (dateInput instanceof Date) {
+    return dateInput.toISOString().split('T')[0];
+  }
+  if (typeof dateInput === 'string') {
+    return dateInput.split('T')[0];
+  }
+  return String(dateInput).split('T')[0];
 }
 
 // ==========================================
@@ -55,8 +72,14 @@ function createFlexNotification(
   bannerUrl,
   taskId,
 ) {
+  const startStr = startTime ? String(startTime).slice(0, 5) : "";
+  const endStr = endTime ? String(endTime).slice(0, 5) : "";
   const timeDisplay =
-    startTime && endTime ? `${startTime.slice(0, 5)} - ${endTime.slice(0, 5)} น.` : "ไม่ได้ระบุเวลา";
+    startStr && endStr ? `${startStr} - ${endStr} น.` : (startStr ? `${startStr} น.` : "ไม่ได้ระบุเวลา");
+
+  // ตรวจสอบ bannerUrl ว่าเป็น HTTPS URL ที่ถูกต้องเท่านั้น (LINE Messaging API ปฏิเสธ URL ที่ไม่ใช่ HTTPS)
+  const isValidBanner = bannerUrl && typeof bannerUrl === "string" && bannerUrl.trim().startsWith("https://");
+  const cleanBannerUrl = isValidBanner ? bannerUrl.trim() : null;
 
   // กำหนดธีมสีตามหมวดหมู่กิจกรรมเพื่อความสวยงามและแยกแยะง่าย
   let themeColor = "#DC2626"; // สีแดง CMTC เป็นสีเริ่มต้น
@@ -85,10 +108,10 @@ function createFlexNotification(
       layout: "vertical",
       paddingAll: "0px",
       contents: [
-        // 1. Banner รูปภาพ (ถ้ามี)
-        ...(bannerUrl ? [{
+        // 1. Banner รูปภาพ (ถ้ามีและเป็น HTTPS)
+        ...(cleanBannerUrl ? [{
           type: "image",
-          url: bannerUrl,
+          url: cleanBannerUrl,
           size: "full",
           aspectRatio: "20:11",
           aspectMode: "cover",
@@ -567,38 +590,61 @@ router.post("/tasks", authenticateToken, async (req, res) => {
       ],
     );
 
-    // 🟢 สเต็ปที่ 2: แปลงวันที่ให้อยู่ในฟอร์แมต YYYY-MM-DD เสมอ เพื่อส่งให้ Line Flex Message
+    // 🟢 สเต็ปที่ 2: แปลงวันที่ให้อยู่ในฟอร์แมต YYYY-MM-DD
     const taskObj = result.rows[0];
-    const formattedDateStr = taskObj.date instanceof Date 
-      ? taskObj.date.toISOString().split('T')[0] 
-      : typeof taskObj.date === 'string' 
-        ? taskObj.date.split('T')[0] 
-        : date;
+    const formattedDateStr = getIsoDateStr(taskObj.date) || date;
 
-    // 🟢 สเต็ปที่ 3: ส่ง LINE แจ้งเตือนเข้าห้องกลุ่มไลน์ (ต้อง Await เพื่อรอส่งให้เสร็จก่อนจบฟังก์ชันบน Vercel)
+    // 🟢 สเต็ปที่ 3: ส่ง LINE แจ้งเตือนเข้าห้องกลุ่มไลน์
     try {
       const targetGroupId = await getTargetGroupId();
-      await lineClient.pushMessage({
-        to: targetGroupId,
-        messages: [
-          createFlexNotification(
-            category,
-            formattedDateStr,
-            title,
-            chairman,
-            room,
-            startTime,
-            endTime,
-            description,
-            bannerUrl,
-            taskObj.id, // 💡 ส่งรหัส ID กิจกรรมไปสร้างปุ่มมอบหมายผ่าน LIFF
-          ),
-        ],
-      });
-      console.log(`🟢 LINE Notification sent successfully to group ${targetGroupId}`);
+      if (!targetGroupId) {
+        console.warn("⚠️ LINE Notification: No target_group_id configured. Please set group in Admin panel or invite bot to group.");
+      } else {
+        try {
+          // พยายามส่งแบบ Flex Message ก่อน
+          await lineClient.pushMessage({
+            to: targetGroupId,
+            messages: [
+              createFlexNotification(
+                category,
+                formattedDateStr,
+                title,
+                chairman,
+                room,
+                startTime,
+                endTime,
+                description,
+                bannerUrl,
+                taskObj.id, // 💡 ส่งรหัส ID กิจกรรมไปสร้างปุ่มมอบหมายผ่าน LIFF
+              ),
+            ],
+          });
+          console.log(`🟢 LINE Flex Notification sent successfully to group ${targetGroupId}`);
+        } catch (flexError) {
+          console.warn("⚠️ Flex Message failed, attempting Plain Text Fallback:", flexError.message);
+          // Fallback ส่งเป็นข้อความธรรมดา หาก Flex ติดปัญหา
+          const startStr = startTime ? String(startTime).slice(0, 5) : "";
+          const endStr = endTime ? String(endTime).slice(0, 5) : "";
+          const timeText = startStr && endStr ? `${startStr} - ${endStr} น.` : (startStr ? `${startStr} น.` : "ไม่ได้ระบุเวลา");
+          const fallbackText = `📌 มีกิจกรรมใหม่ในระบบ!\n\n` +
+                               `🏷️ หมวดหมู่: ${category || "ทั่วไป"}\n` +
+                               `📝 เรื่อง: ${title}\n` +
+                               `📅 วันที่: ${formattedDateStr} (${timeText})\n` +
+                               `🚪 สถานที่: ${room || "-"}\n` +
+                               `👤 ผู้รับผิดชอบ: ${chairman || "-"}\n` +
+                               (description ? `📋 วาระงาน: ${description}\n` : "") +
+                               `\n👉 มอบหมายงาน: https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID || "2010617243-H2wIcDTp"}/assign?taskId=${taskObj.id}`;
+          
+          await lineClient.pushMessage({
+            to: targetGroupId,
+            messages: [{ type: "text", text: fallbackText }],
+          });
+          console.log(`🟢 LINE Plain Text Notification sent successfully to group ${targetGroupId}`);
+        }
+      }
     } catch (lineError) {
       console.error(
-        "⚠️ LINE Notification failed but data was saved safely. Details:",
+        "⚠️ LINE Notification push completely failed. Details:",
         lineError.message,
         lineError.response ? JSON.stringify(lineError.response.data || lineError.response) : ""
       );
@@ -894,107 +940,266 @@ router.put(
 
 
 
+// ทดสอบส่งข้อความเข้ากลุ่ม LINE (Admin เท่านั้น)
+router.post("/admin/settings/test-line-notification", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const targetGroupId = await getTargetGroupId();
+    if (!targetGroupId) {
+      return res.status(400).json({ success: false, message: "ยังไม่ได้ระบุ LINE Group ID ในระบบ กรุณาบันทึกรหัสกลุ่มก่อนครับ" });
+    }
+
+    await lineClient.pushMessage({
+      to: targetGroupId,
+      messages: [{
+        type: "text",
+        text: `🔔 [ทดสอบระบบ Smart Event CMTC]\n\n✅ ข้อความแจ้งเตือนทดสอบนี้ส่งสำเร็จเรียบร้อยแล้วครับ!\n🆔 Group ID: ${targetGroupId}\n⏱️ เวลาทดสอบ: ${new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'medium' }).format(new Date())}`
+      }]
+    });
+
+    res.json({ success: true, message: `ส่งข้อความทดสอบเข้ากลุ่ม (${targetGroupId}) สำเร็จเรียบร้อยแล้ว!` });
+  } catch (error) {
+    console.error("Test LINE notification error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: `ส่งข้อความไม่สำเร็จ: ${error.message}. กรุณาตรวจสอบว่าบอทอยู่ในกลุ่มแล้วหรือไม่ หรือ LINE Access Token ถูกต้อง` 
+    });
+  }
+});
+
+// ==========================================
+// 🤖 LINE WEBHOOK ENDPOINT
+// ==========================================
 router.post("/webhook", async (req, res) => {
   try {
     const events = req.body.events;
-    if (!events || events.length === 0)
+    if (!events || events.length === 0) {
       return res.status(200).json({ status: "ok" });
+    }
+
     for (let event of events) {
-      // 1. จัดการข้อความที่พิมพ์มา (รวมถึงปุ่มจาก Rich Menu)
+      // 🟢 1. กรณีบอทถูกเชิญเข้ากลุ่ม (Join Event) หรือมีคนเข้ากลุ่ม
+      if (event.type === "join" || event.type === "memberJoined") {
+        if (event.source && event.source.groupId) {
+          const joinedGroupId = event.source.groupId;
+          try {
+            // บันทึก group id นี้ลงฐานข้อมูลอัตโนมัติทันที
+            await query(
+              `INSERT INTO system_settings (key, value)
+               VALUES ('target_group_id', $1)
+               ON CONFLICT (key)
+               DO UPDATE SET value = EXCLUDED.value`,
+              [joinedGroupId]
+            );
+            console.log(`Auto-saved target_group_id on join: ${joinedGroupId}`);
+
+            if (event.replyToken) {
+              await lineClient.replyMessage({
+                replyToken: event.replyToken,
+                messages: [{
+                  type: "text",
+                  text: `🎉 สวัสดีครับทุกคน! บอท Smart Event CMTC เข้าร่วมกลุ่มเรียบร้อยแล้วครับ\n\n✅ ระบบได้ตั้งค่ากลุ่มนี้สำหรับการแจ้งเตือนกิจกรรมอัตโนมัติเรียบร้อยแล้ว!\n🆔 Group ID: ${joinedGroupId}\n\n👉 พิมพ์ "เช็คงานวันนี้" เพื่อดูตารางงาน\n👉 พิมพ์ "id" เพื่อตรวจสอบรหัสกลุ่ม`
+                }]
+              });
+            }
+          } catch (joinErr) {
+            console.error("Handle join event error:", joinErr);
+          }
+        }
+      }
+
+      // 🟢 2. จัดการข้อความที่พิมพ์มา (รวมถึงปุ่มกดจาก Rich Menu)
       if (event.type === "message" && event.message.type === "text") {
-        const userMessage = event.message.text.trim().toLowerCase();
+        const rawMessage = event.message.text.trim();
+        const userMessage = rawMessage.toLowerCase();
         const replyToken = event.replyToken;
 
-        // เคส: เช็ค ID (ใช้ได้ทั้งในกลุ่มและส่วนตัว)
-        if (userMessage === "id") {
-          const idText = event.source.type === "group" 
-            ? `ID กลุ่มของคุณคือ:\n${event.source.groupId}`
-            : `ID ของคุณคือ:\n${event.source.userId}`;
-          await lineClient.replyMessage({
-            replyToken,
-            messages: [{ type: "text", text: idText }],
-          });
+        // เคสที่ 1: เช็ค ID
+        if (userMessage === "id" || userMessage === "check id" || userMessage === "ไอดี") {
+          if (event.source.type === "group") {
+            const groupId = event.source.groupId;
+            // บันทึกลง database ทันทีเพื่อความสะดวก
+            try {
+              await query(
+                `INSERT INTO system_settings (key, value)
+                 VALUES ('target_group_id', $1)
+                 ON CONFLICT (key)
+                 DO UPDATE SET value = EXCLUDED.value`,
+                [groupId]
+              );
+            } catch (saveErr) {
+              console.error("Save group id error:", saveErr.message);
+            }
+
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{
+                type: "text",
+                text: `🆔 รหัสกลุ่ม LINE ของคุณคือ:\n${groupId}\n\n✅ ระบบได้บันทึกกลุ่มนี้เป็นกลุ่มเป้าหมายสำหรับการแจ้งเตือนเรียบร้อยแล้วครับ!`
+              }]
+            });
+          } else {
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{
+                type: "text",
+                text: `🆔 User ID ของคุณคือ:\n${event.source.userId}`
+              }]
+            });
+          }
         }
 
-        // เคส: "เช็คงานวันนี้" (ดึงจาก Rich Menu)
-        if (userMessage === "เช็คงานวันนี้") {
+        // เคสที่ 2: ตั้งค่ากลุ่มนี้ / ลงทะเบียนกลุ่ม
+        else if (userMessage === "ตั้งค่ากลุ่มนี้" || userMessage === "ลงทะเบียนกลุ่ม" || userMessage === "setgroup") {
+          if (event.source.type === "group") {
+            const groupId = event.source.groupId;
+            await query(
+              `INSERT INTO system_settings (key, value)
+               VALUES ('target_group_id', $1)
+               ON CONFLICT (key)
+               DO UPDATE SET value = EXCLUDED.value`,
+              [groupId]
+            );
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{
+                type: "text",
+                text: `✅ ตั้งค่ากลุ่มสำเร็จ!\nบันทึกกลุ่ม ${groupId} สำหรับการแจ้งเตือนกิจกรรมเรียบร้อยแล้วครับ!`
+              }]
+            });
+          } else {
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{
+                type: "text",
+                text: `คำสั่งนี้ใช้ได้เฉพาะในกลุ่ม LINE เท่านั้นครับ`
+              }]
+            });
+          }
+        }
+
+        // เคสที่ 3: "เช็คงานวันนี้" (จาก Rich Menu หรือพิมพ์เข้ามา)
+        else if (
+          userMessage === "เช็คงานวันนี้" ||
+          userMessage.includes("เช็คงาน") ||
+          userMessage.includes("งานวันนี้") ||
+          userMessage.includes("ดูกิจกรรม") ||
+          userMessage === "today"
+        ) {
           try {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getBangkokTodayStr();
+            console.log(`🔍 Webhook checking tasks for today (Bangkok): ${todayStr}`);
+
             const result = await query(
-              "SELECT * FROM tasks WHERE date = $1 ORDER BY start_time ASC",
+              "SELECT * FROM tasks WHERE date::text LIKE $1 || '%' OR date = $1 ORDER BY start_time ASC NULLS LAST, created_at ASC",
               [todayStr]
             );
 
             if (result.rows.length === 0) {
               await lineClient.replyMessage({
                 replyToken,
-                messages: [{ type: "text", text: "📅 วันนี้ไม่มีกิจกรรมนัดหมายครับ!" }],
+                messages: [{
+                  type: "text",
+                  text: `📅 รายการกิจกรรมวันนี้ (${todayStr})\n\n☀️ วันนี้ไม่มีกิจกรรมนัดหมายในระบบครับ ขอให้เป็นวันที่ดีสำหรับการทำงานครับ! ✨`
+                }],
               });
             } else {
-              // 🎨 สร้าง Flex Message สำหรับแต่ละกิจกรรม
-              const bubbles = result.rows.map(task => {
+              // 🎨 สร้าง Flex Message Bubble สำหรับแต่ละกิจกรรม (จำกัดไม่เกิน 10 bubbles ตามข้อกำหนด LINE Carousel)
+              const maxTasks = result.rows.slice(0, 10);
+              const bubbles = maxTasks.map(task => {
+                const dateStr = getIsoDateStr(task.date);
+                const startTime = task.start_time ? String(task.start_time).slice(0, 5) : "";
+                const endTime = task.end_time ? String(task.end_time).slice(0, 5) : "";
+
                 const flex = createFlexNotification(
                   task.category,
-                  task.date.toISOString().split('T')[0],
+                  dateStr,
                   task.title,
                   task.chairman,
                   task.room,
-                  task.start_time.slice(0, 5),
-                  task.end_time.slice(0, 5),
+                  startTime,
+                  endTime,
                   task.description,
-                  task.banner_url
+                  task.banner_url,
+                  task.id
                 );
-                return flex.contents; // ดึงเฉพาะส่วน contents (bubble)
+                return flex.contents;
               });
 
-              // ส่งแบบ Carousel ถ้ามีหลายงาน หรือ Bubble เดียวถ้ามีงานเดียว
-              await lineClient.replyMessage({
-                replyToken,
-                messages: [
-                  {
-                    type: "flex",
-                    altText: `📅 รายการกิจกรรมวันนี้ (${todayStr})`,
-                    contents: bubbles.length > 1 
-                      ? { type: "carousel", contents: bubbles }
-                      : bubbles[0]
-                  }
-                ],
-              });
+              try {
+                await lineClient.replyMessage({
+                  replyToken,
+                  messages: [
+                    {
+                      type: "flex",
+                      altText: `📅 รายการกิจกรรมวันนี้ (${todayStr}) - พบ ${result.rows.length} กิจกรรม`,
+                      contents: bubbles.length > 1 
+                        ? { type: "carousel", contents: bubbles }
+                        : bubbles[0]
+                    }
+                  ],
+                });
+              } catch (flexReplyErr) {
+                console.warn("Flex Carousel reply failed, falling back to Plain Text:", flexReplyErr.message);
+                let fallbackText = `📅 สรุปรายการกิจกรรมวันนี้ (${todayStr}) - ทั้งหมด ${result.rows.length} กิจกรรม\n\n`;
+                result.rows.forEach((task, index) => {
+                  const timeDisplay = task.start_time ? `${String(task.start_time).slice(0, 5)} น.` : "ไม่ระบุเวลา";
+                  fallbackText += `${index + 1}. 📝 เรื่อง: ${task.title}\n` +
+                                  `⏰ เวลา: ${timeDisplay}\n` +
+                                  `🚪 สถานที่: ${task.room || "-"}\n` +
+                                  `👤 ผู้รับผิดชอบ: ${task.chairman || "-"}\n` +
+                                  `-----------------------\n`;
+                });
+                await lineClient.replyMessage({
+                  replyToken,
+                  messages: [{ type: "text", text: fallbackText }]
+                });
+              }
             }
           } catch (error) {
             console.error("Webhook Check Task Error:", error);
+            try {
+              await lineClient.replyMessage({
+                replyToken,
+                messages: [{ type: "text", text: "⚠️ เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม กรุณาลองใหม่อีกครั้งครับ" }]
+              });
+            } catch (err2) {
+              console.error("Send error reply failed:", err2);
+            }
           }
         }
 
-        // 🆕 เคส: "ติดต่อแอดมิน" (ส่งทั้งหา User และเข้ากลุ่ม Admin)
-        if (userMessage === "ติดต่อแอดมิน") {
+        // เคสที่ 4: "ติดต่อแอดมิน" (จาก Rich Menu)
+        else if (userMessage === "ติดต่อแอดมิน" || userMessage.includes("ติดต่อแอดมิน") || userMessage === "admin") {
           try {
             const userId = event.source.userId;
             
-            // 1. ตอบกลับหา User (แบบที่ 1)
+            // 1. ตอบกลับหา User
             await lineClient.replyMessage({
               replyToken,
               messages: [{ 
                 type: "text", 
-                text: "📨 รับเรื่องเรียบร้อยครับ! ผมได้แจ้งเตือนเจ้าหน้าที่ให้ทราบแล้ว\n\nหากมีรายละเอียดเพิ่มเติมหรือต้องการแนบรูปภาพ สามารถพิมพ์ทิ้งไว้ได้เลยครับ เจ้าหน้าที่จะรีบมาตอบกลับผ่านแชทนี้โดยเร็วที่สุดครับ" 
+                text: "📨 รับเรื่องเรียบร้อยครับ! ผมได้แจ้งเตือนเจ้าหน้าที่ให้ทราบแล้ว\n\nหากมีรายละเอียดเพิ่มเติมหรือต้องการแนบรูปภาพ สามารถพิมพ์ทิ้งไว้ได้เลยครับ เจ้าหน้าที่จะรีบมาตอบกลับโดยเร็วที่สุดครับ" 
               }],
             });
 
-            // 2. ส่งแจ้งเตือนเข้ากลุ่ม Admin (แบบที่ 2)
+            // 2. ส่งแจ้งเตือนเข้ากลุ่ม Admin
             const targetGroupId = await getTargetGroupId();
-            await lineClient.pushMessage({
-              to: targetGroupId,
-              messages: [{ 
-                type: "text", 
-                text: `⚠️ แจ้งเตือน: มีสมาชิกต้องการติดต่อแอดมิน!\n👤 User ID: ${userId}\n\n(แอดมินสามารถตอบกลับผ่านหน้าเว็บ Manager หรือระบบแชทได้เลยครับ)` 
-              }],
-            });
+            if (targetGroupId) {
+              await lineClient.pushMessage({
+                to: targetGroupId,
+                messages: [{ 
+                  type: "text", 
+                  text: `⚠️ แจ้งเตือน: มีสมาชิกต้องการติดต่อแอดมิน!\n👤 User ID: ${userId || "ไม่ระบุ"}\n\n(แอดมินสามารถตรวจสอบและติดต่อกลับได้ครับ)` 
+                }],
+              });
+            }
           } catch (error) {
             console.error("Contact Admin Notification Error:", error);
           }
         }
       }
     }
+
     return res.status(200).json({ status: "ok" });
   } catch (error) {
     console.error("Webhook Error:", error);
