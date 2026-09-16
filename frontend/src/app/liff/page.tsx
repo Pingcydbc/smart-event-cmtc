@@ -2,6 +2,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
+import {
+  CalendarDays,
+  LayoutGrid,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  MapPin,
+  User,
+  Eye,
+  Calendar,
+  Sparkles,
+} from "lucide-react";
 
 export default function LiffPage() {
   const [liffInitialized, setLiffInitialized] = useState(false);
@@ -15,6 +27,16 @@ export default function LiffPage() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+  });
+
+  // สเตทสำหรับสลับมุมมอง (list = แบบการ์ดรายการ, calendar = แบบปฏิทิน)
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  // สเตทสำหรับเดือนและปีที่แสดงในปฏิทิน
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  // สเตทสำหรับวันที่ถูกเลือกเพื่อแสดงกิจกรรมด้านล่าง (YYYY-MM-DD)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
 
   const API_URL =
@@ -232,6 +254,119 @@ export default function LiffPage() {
     }
   };
 
+  // สกัด YYYY-MM-DD จากวันที่กิจกรรม
+  const getTaskDateStr = (dateVal: any) => {
+    if (!dateVal) return "";
+    if (typeof dateVal === "string") {
+      return dateVal.split("T")[0].trim();
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const getCategoryDot = (category: string) => {
+    switch (category) {
+      case "การเงิน":
+        return "bg-emerald-500";
+      case "การตลาด":
+        return "bg-amber-500";
+      case "ประชาสัมพันธ์":
+        return "bg-sky-500";
+      case "กิจกรรม":
+        return "bg-rose-500";
+      default:
+        return "bg-slate-400";
+    }
+  };
+
+  const getCategoryBadgeClass = (category: string) => {
+    switch (category) {
+      case "การเงิน":
+        return "bg-emerald-50 text-emerald-600";
+      case "การตลาด":
+        return "bg-amber-50 text-amber-600";
+      case "ประชาสัมพันธ์":
+        return "bg-sky-50 text-sky-600";
+      case "กิจกรรม":
+        return "bg-rose-50 text-rose-600";
+      default:
+        return "bg-slate-100 text-slate-600";
+    }
+  };
+
+  // ป๊อปอัปดูรายละเอียดกิจกรรม
+  const handleViewDetails = (task: any) => {
+    const formattedDate = new Date(task.date).toLocaleDateString("th-TH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const timeStart = task.start_time ? task.start_time.substring(0, 5) : "08:30";
+    const timeEnd = task.end_time ? task.end_time.substring(0, 5) : "11:30";
+
+    Swal.fire({
+      title: `<span class="text-slate-900 font-bold text-base border-b border-slate-100 pb-2 block">📄 รายละเอียดกิจกรรม</span>`,
+      html: `
+        <div class="text-left space-y-3 text-xs text-slate-600 pt-2 bg-white">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded text-[10px] uppercase">${task.category || "กิจกรรม"}</span>
+            <span class="text-slate-400 text-[11px]">📅 ${formattedDate}</span>
+          </div>
+          <div class="text-sm font-bold text-slate-900">${task.title}</div>
+          
+          <div class="bg-slate-50 p-3 rounded-xl text-xs text-slate-700 border border-slate-100 whitespace-pre-wrap">
+            <strong>📝 วาระงาน / รายละเอียด:</strong><br/>
+            <p class="mt-1 text-slate-600 font-medium">${task.description || "ไม่มีรายละเอียดเพิ่มเติมสำหรับกิจกรรมนี้"}</p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-1.5 border-t border-slate-50 pt-2 text-xs">
+            <div><strong>⏱️ ช่วงเวลา:</strong> <span class="text-red-600 font-bold">${timeStart} - ${timeEnd} น.</span></div>
+            <div><strong>👤 ผู้รับผิดชอบ:</strong> ${task.chairman || "ไม่ระบุ"}</div>
+            <div><strong>🚪 สถานที่จัด:</strong> ${task.room || "ไม่ระบุ"}</div>
+            ${task.creator_name ? `<div class="text-slate-400 text-[10px] pt-1">ผู้โพสต์: ${task.creator_name}</div>` : ""}
+          </div>
+        </div>
+      `,
+      confirmButtonText: "ปิดหน้าต่าง",
+      confirmButtonColor: "#dc2626",
+      customClass: { popup: "rounded-2xl" },
+    });
+  };
+
+  const monthsTh = [
+    "มกราคม",
+    "กุมภาพันธ์",
+    "มีนาคม",
+    "เมษายน",
+    "พฤษภาคม",
+    "มิถุนายน",
+    "กรกฎาคม",
+    "สิงหาคม",
+    "กันยายน",
+    "ตุลาคม",
+    "พฤศจิกายน",
+    "ธันวาคม",
+  ];
+
+  const daysOfWeekTh = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+
+  const handlePrevMonth = () => {
+    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    const now = new Date();
+    setCalendarDate(now);
+    setSelectedDate(
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
@@ -289,7 +424,7 @@ export default function LiffPage() {
           <div className="p-4 flex-1">
             {/* ปุ่มเพิ่มงานสำหรับ Normal User, Staff และ แอดมิน */}
             {(user.role === "admin" || user.role === "user_pr" || user.role === "user_n") && (
-              <div className="mb-5">
+              <div className="mb-4">
                 <Link
                   href="/form"
                   className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-700 hover:to-rose-600 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-xs font-bold shadow-md shadow-red-500/10 transition-all text-center"
@@ -299,15 +434,43 @@ export default function LiffPage() {
               </div>
             )}
 
+            {/* 🔘 ปุ่มสลับมุมมอง (Segmented Switcher: รายการ vs ปฏิทิน) */}
+            <div className="flex bg-slate-200/70 p-1 rounded-xl mb-4 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`flex-1 py-2 text-center rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  viewMode === "list"
+                    ? "bg-white text-slate-800 shadow-sm font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                📋 แบบรายการ
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("calendar")}
+                className={`flex-1 py-2 text-center rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  viewMode === "calendar"
+                    ? "bg-white text-slate-800 shadow-sm font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                📅 แบบปฏิทิน
+              </button>
+            </div>
+
             {/* แท็บสลับหน้างานสำหรับ Staff / ผู้ปฏิบัติงาน */}
             {user.role === "user_pr" && (
-              <div className="flex bg-slate-200/60 p-1 rounded-xl mb-4 text-xs font-semibold">
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold border border-slate-200/60">
                 <button
                   type="button"
                   onClick={() => setActiveTab("my")}
-                  className={`flex-1 py-2 text-center rounded-lg transition-all ${
+                  className={`flex-1 py-1.5 text-center rounded-lg transition-all ${
                     activeTab === "my"
-                      ? "bg-white text-slate-800 shadow-sm"
+                      ? "bg-white text-slate-800 shadow-sm font-bold"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
@@ -316,106 +479,353 @@ export default function LiffPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("all")}
-                  className={`flex-1 py-2 text-center rounded-lg transition-all ${
+                  className={`flex-1 py-1.5 text-center rounded-lg transition-all ${
                     activeTab === "all"
-                      ? "bg-white text-slate-800 shadow-sm"
+                      ? "bg-white text-slate-800 shadow-sm font-bold"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  📋 งานทั้งหมดที่เปิดรับ ({tasks.length})
+                  📋 งานทั้งหมด ({tasks.length})
                 </button>
               </div>
             )}
 
-            {/* หัวข้อเรื่องและจำนวนกิจกรรม */}
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-bold text-slate-800">
-                {user.role === "admin" || user.role === "user_n" 
-                  ? "📋 งานทั้งหมดในระบบ" 
-                  : activeTab === "my" 
-                    ? "🎖️ งานที่คุณได้รับมอบหมาย" 
-                    : "📋 รายการงานทั้งหมดที่รับได้"}
-              </h4>
-              <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                {(user.role === "user_pr" 
-                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
-                  : tasks
-                ).length} กิจกรรม
-              </span>
-            </div>
+            {/* ตรรกะคัดกรองงานตามแท็บ */}
+            {(() => {
+              const displayedTasks =
+                user.role === "user_pr"
+                  ? activeTab === "my"
+                    ? tasks.filter((t) => t.user_id === user.id)
+                    : tasks
+                  : tasks;
 
-            {loadingTasks ? (
-              <div className="py-12 flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-                <p className="text-xs text-slate-400 mt-2">กำลังดึงข้อมูลกิจกรรม...</p>
-              </div>
-            ) : (user.role === "user_pr" 
-                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks) 
-                  : tasks
-                 ).length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center shadow-[0_4px_20px_rgba(0,0,0,0.01)]">
-                <span className="text-3xl block mb-2">🎉</span>
-                <h5 className="text-xs font-bold text-slate-700">ไม่มีกิจกรรมนัดหมายในขณะนี้</h5>
-                <p className="text-[10px] text-slate-400 mt-1">หากมีกิจกรรมใหม่หรือได้รับมอบหมายงาน จะแสดงผลตรงนี้ทันที</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {(user.role === "user_pr" 
-                  ? (activeTab === "my" ? tasks.filter((t) => t.user_id === user.id) : tasks)
-                  : tasks
-                ).map((task) => (
-                  <div
-                    key={task.id}
-                    className="bg-white p-4 rounded-xl border border-slate-100/80 shadow-sm flex flex-col gap-2 hover:border-slate-200 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-600 uppercase tracking-wider">
-                        {task.category}
-                      </span>
-                      <span className="text-[10px] font-medium text-slate-400">
-                        {new Date(task.date).toLocaleDateString("th-TH", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </div>
-
-                    <h5 className="font-bold text-slate-800 text-sm leading-snug">{task.title}</h5>
-
-                    <div className="grid grid-cols-2 gap-y-1.5 gap-x-2 pt-2 border-t border-slate-50 text-[11px] text-slate-500">
-                      <div className="truncate">
-                        <span className="font-semibold text-slate-700">⏱️ เวลา:</span>{" "}
-                        {task.start_time?.substring(0, 5)} - {task.end_time?.substring(0, 5)} น.
-                      </div>
-                      <div className="truncate">
-                        <span className="font-semibold text-slate-700">🚪 ห้อง:</span> {task.room}
-                      </div>
-                      <div className="col-span-2 truncate">
-                        <span className="font-semibold text-slate-700">👤 ผู้ดูแล:</span> {task.chairman}
-                      </div>
-                    </div>
-
-                    {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_pr) */}
-                    {user.role === "user_pr" && (
-                      <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
-                        {task.user_id === user.id ? (
-                          <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                            ✅ คุณได้รับผิดชอบงานนี้แล้ว
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleAcceptTask(task.id, task.title)}
-                            className="bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-bold py-1.5 px-3.5 rounded-lg transition-all shadow-sm shadow-red-500/10 flex items-center gap-1"
-                          >
-                            📥 กดรับงานนี้
-                          </button>
-                        )}
-                      </div>
-                    )}
+              if (loadingTasks) {
+                return (
+                  <div className="py-12 flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                    <p className="text-xs text-slate-400 mt-2">กำลังดึงข้อมูลกิจกรรม...</p>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              // ==========================================
+              // 📅 โหมดที่ 1: แสดงผลแบบปฏิทิน (Calendar View)
+              // ==========================================
+              if (viewMode === "calendar") {
+                const year = calendarDate.getFullYear();
+                const month = calendarDate.getMonth();
+                const startDayOfWeek = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                const todayObj = new Date();
+                const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
+
+                // การ์ดกิจกรรมประจำวันที่เลือก
+                const selectedDateTasks = displayedTasks.filter(
+                  (t) => getTaskDateStr(t.date) === selectedDate
+                );
+
+                const calendarCells = [];
+                for (let i = 0; i < startDayOfWeek; i++) {
+                  calendarCells.push(
+                    <div key={`empty-${i}`} className="h-10 sm:h-11 rounded-xl" />
+                  );
+                }
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                  const currentCellDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                  const dayTasks = displayedTasks.filter(
+                    (t) => getTaskDateStr(t.date) === currentCellDateStr
+                  );
+                  const isSelected = selectedDate === currentCellDateStr;
+                  const isToday = currentCellDateStr === todayStr;
+
+                  calendarCells.push(
+                    <button
+                      key={`day-${day}`}
+                      type="button"
+                      onClick={() => setSelectedDate(currentCellDateStr)}
+                      className={`h-10 sm:h-11 rounded-xl flex flex-col items-center justify-center relative transition-all active:scale-95 ${
+                        isSelected
+                          ? "bg-red-600 text-white font-bold shadow-md shadow-red-500/20 scale-[1.02]"
+                          : isToday
+                          ? "border border-red-500 bg-red-50/50 text-red-600 font-bold"
+                          : "hover:bg-slate-100 text-slate-700 font-medium"
+                      }`}
+                    >
+                      <span className="text-xs leading-none">{day}</span>
+                      {dayTasks.length > 0 && (
+                        <div className="flex justify-center gap-0.5 mt-1">
+                          {dayTasks.slice(0, 3).map((ev: any, idx: number) => (
+                            <span
+                              key={idx}
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isSelected ? "bg-white" : getCategoryDot(ev.category)
+                              }`}
+                            />
+                          ))}
+                          {dayTasks.length > 3 && (
+                            <span
+                              className={`text-[7px] leading-none ${
+                                isSelected ? "text-white" : "text-slate-400"
+                              }`}
+                            >
+                              +
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {/* ตลับปฏิทินรายเดือน */}
+                    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-100 shadow-sm">
+                      {/* หัวแถบเลือกเดือน */}
+                      <div className="flex items-center justify-between mb-2 pb-2.5 border-b border-slate-100">
+                        <button
+                          type="button"
+                          onClick={handlePrevMonth}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 active:scale-95 text-slate-600 transition-all"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-bold text-slate-800 text-sm">
+                            {monthsTh[month]} {year + 543}
+                          </h5>
+                          <button
+                            type="button"
+                            onClick={handleToday}
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition-all"
+                          >
+                            วันนี้
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleNextMonth}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 active:scale-95 text-slate-600 transition-all"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* ชื่อวันในสัปดาห์ */}
+                      <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                        {daysOfWeekTh.map((d, i) => (
+                          <div
+                            key={d}
+                            className={`text-[10px] font-bold py-1 ${
+                              i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-400"
+                            }`}
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ตารางวันทั้งหมดในเดือน */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {calendarCells}
+                      </div>
+
+                      {/* สัญลักษณ์สีหมวดหมู่ */}
+                      <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-center gap-3 text-[10px] text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" /> การเงิน
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" /> การตลาด
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-sky-500" /> ประชาสัมพันธ์
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-rose-500" /> กิจกรรม
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* รายการกิจกรรมของวันที่เลือก */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-red-600" />
+                          กิจกรรมวันที่{" "}
+                          {(() => {
+                            const [y, m, d] = selectedDate.split("-").map(Number);
+                            return `${d} ${monthsTh[m - 1]} ${y + 543}`;
+                          })()}
+                        </h5>
+                        <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                          {selectedDateTasks.length} กิจกรรม
+                        </span>
+                      </div>
+
+                      {selectedDateTasks.length === 0 ? (
+                        <div className="bg-white rounded-2xl border border-slate-100 p-6 text-center shadow-sm">
+                          <span className="text-2xl block mb-1">🏖️</span>
+                          <h6 className="text-xs font-bold text-slate-700">ไม่มีกิจกรรมในวันที่เลือก</h6>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            คุณสามารถแตะเลือกวันที่มีจุดสีบนปฏิทินเพื่อดูกิจกรรมได้ครับ
+                          </p>
+                        </div>
+                      ) : (
+                        selectedDateTasks.map((task) => (
+                          <div
+                            key={task.id}
+                            className="bg-white p-4 rounded-xl border border-slate-100/80 shadow-sm flex flex-col gap-2 hover:border-slate-200 transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getCategoryBadgeClass(task.category)}`}>
+                                {task.category || "กิจกรรม"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleViewDetails(task)}
+                                className="text-[11px] font-semibold text-red-600 hover:text-red-700 flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md transition-all active:scale-95"
+                              >
+                                <Eye className="w-3 h-3" /> ดูรายละเอียด
+                              </button>
+                            </div>
+
+                            <h5 className="font-bold text-slate-800 text-sm leading-snug">{task.title}</h5>
+
+                            <div className="grid grid-cols-2 gap-y-1.5 gap-x-2 pt-2 border-t border-slate-50 text-[11px] text-slate-500">
+                              <div className="truncate">
+                                <span className="font-semibold text-slate-700">⏱️ เวลา:</span>{" "}
+                                {task.start_time?.substring(0, 5)} - {task.end_time?.substring(0, 5)} น.
+                              </div>
+                              <div className="truncate">
+                                <span className="font-semibold text-slate-700">🚪 ห้อง:</span> {task.room || "-"}
+                              </div>
+                              <div className="col-span-2 truncate">
+                                <span className="font-semibold text-slate-700">👤 ผู้ดูแล:</span> {task.chairman || "-"}
+                              </div>
+                            </div>
+
+                            {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_pr) */}
+                            {user.role === "user_pr" && (
+                              <div className="mt-2 pt-2 border-t border-slate-100 flex justify-end">
+                                {task.user_id === user.id ? (
+                                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                                    ✅ คุณได้รับผิดชอบงานนี้แล้ว
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleAcceptTask(task.id, task.title)}
+                                    className="bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-bold py-1.5 px-3.5 rounded-lg transition-all shadow-sm shadow-red-500/10 flex items-center gap-1"
+                                  >
+                                    📥 กดรับงานนี้
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              // ==========================================
+              // 📋 โหมดที่ 2: แสดงผลแบบการ์ดรายการ (List View)
+              // ==========================================
+              return (
+                <div>
+                  {/* หัวข้อเรื่องและจำนวนกิจกรรม */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      {user.role === "admin" || user.role === "user_n" 
+                        ? "📋 งานทั้งหมดในระบบ" 
+                        : activeTab === "my" 
+                          ? "🎖️ งานที่คุณได้รับมอบหมาย" 
+                          : "📋 รายการงานทั้งหมดที่รับได้"}
+                    </h4>
+                    <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                      {displayedTasks.length} กิจกรรม
+                    </span>
+                  </div>
+
+                  {displayedTasks.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center shadow-[0_4px_20px_rgba(0,0,0,0.01)]">
+                      <span className="text-3xl block mb-2">🎉</span>
+                      <h5 className="text-xs font-bold text-slate-700">ไม่มีกิจกรรมนัดหมายในขณะนี้</h5>
+                      <p className="text-[10px] text-slate-400 mt-1">หากมีกิจกรรมใหม่หรือได้รับมอบหมายงาน จะแสดงผลตรงนี้ทันที</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {displayedTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="bg-white p-4 rounded-xl border border-slate-100/80 shadow-sm flex flex-col gap-2 hover:border-slate-200 transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getCategoryBadgeClass(task.category)}`}>
+                              {task.category || "กิจกรรม"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-medium text-slate-400">
+                                {new Date(task.date).toLocaleDateString("th-TH", {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleViewDetails(task)}
+                                className="text-[11px] font-semibold text-red-600 hover:text-red-700 flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md transition-all active:scale-95"
+                              >
+                                <Eye className="w-3 h-3" /> ดู
+                              </button>
+                            </div>
+                          </div>
+
+                          <h5 className="font-bold text-slate-800 text-sm leading-snug">{task.title}</h5>
+
+                          <div className="grid grid-cols-2 gap-y-1.5 gap-x-2 pt-2 border-t border-slate-50 text-[11px] text-slate-500">
+                            <div className="truncate">
+                              <span className="font-semibold text-slate-700">⏱️ เวลา:</span>{" "}
+                              {task.start_time?.substring(0, 5)} - {task.end_time?.substring(0, 5)} น.
+                            </div>
+                            <div className="truncate">
+                              <span className="font-semibold text-slate-700">🚪 ห้อง:</span> {task.room || "-"}
+                            </div>
+                            <div className="col-span-2 truncate">
+                              <span className="font-semibold text-slate-700">👤 ผู้ดูแล:</span> {task.chairman || "-"}
+                            </div>
+                          </div>
+
+                          {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_pr) */}
+                          {user.role === "user_pr" && (
+                            <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
+                              {task.user_id === user.id ? (
+                                <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                                  ✅ คุณได้รับผิดชอบงานนี้แล้ว
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleAcceptTask(task.id, task.title)}
+                                  className="bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-bold py-1.5 px-3.5 rounded-lg transition-all shadow-sm shadow-red-500/10 flex items-center gap-1"
+                                >
+                                  📥 กดรับงานนี้
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       ) : (
