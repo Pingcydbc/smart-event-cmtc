@@ -23,6 +23,10 @@ try {
   console.log("Checking database schema updates...");
   await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(255);");
   
+  // ตรวจสอบและเพิ่มคอลัมน์ในตาราง tasks ให้ครบถ้วนตามสเปก
+  await query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES users(id);");
+  await query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS banner_url TEXT;");
+  
   // สร้างตารางสำหรับเก็บตั้งค่าระบบ เช่น LINE Group ID
   await query(`
     CREATE TABLE IF NOT EXISTS system_settings (

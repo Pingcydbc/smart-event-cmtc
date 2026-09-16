@@ -133,6 +133,8 @@ export default function FormPage() {
                 <option value="การตลาด">การตลาด</option>
                 <option value="ประชาสัมพันธ์">ประชาสัมพันธ์</option>
                 <option value="กิจกรรม">กิจกรรม</option>
+                <option value="การเรียนการสอน">การเรียนการสอน</option>
+                <option value="ด่วน">ด่วน / กิจกรรมเร่งด่วน</option>
               </select>
             </div>
 

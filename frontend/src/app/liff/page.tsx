@@ -240,15 +240,18 @@ export default function LiffPage() {
     setTasks([]);
   };
 
-  // เปลี่ยนสี badge ตามสิทธิ์
+  // เปลี่ยนสี badge ตามสิทธิ์ 4 ระดับ (RBAC)
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "admin":
-        return <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Admin</span>;
+        return <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">👑 Admin</span>;
+      case "pr":
       case "user_pr":
-        return <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Staff / ผู้ปฏิบัติงาน</span>;
+        return <span className="bg-sky-100 text-sky-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">📢 PR / ประชาสัมพันธ์</span>;
+      case "staff":
+        return <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">👤 Staff / ผู้ปฏิบัติงาน</span>;
       case "user_n":
-        return <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Normal User / ผู้ใช้ทั่วไป</span>;
+        return <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">👥 Normal User</span>;
       default:
         return <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">{role}</span>;
     }
@@ -275,6 +278,11 @@ export default function LiffPage() {
         return "bg-sky-500";
       case "กิจกรรม":
         return "bg-rose-500";
+      case "การเรียนการสอน":
+        return "bg-blue-600";
+      case "ด่วน":
+      case "ด่วนที่สุด":
+        return "bg-red-600";
       default:
         return "bg-slate-400";
     }
@@ -290,6 +298,11 @@ export default function LiffPage() {
         return "bg-sky-50 text-sky-600";
       case "กิจกรรม":
         return "bg-rose-50 text-rose-600";
+      case "การเรียนการสอน":
+        return "bg-blue-50 text-blue-600";
+      case "ด่วน":
+      case "ด่วนที่สุด":
+        return "bg-red-50 text-red-600 font-bold";
       default:
         return "bg-slate-100 text-slate-600";
     }
@@ -463,7 +476,7 @@ export default function LiffPage() {
             </div>
 
             {/* แท็บสลับหน้างานสำหรับ Staff / ผู้ปฏิบัติงาน */}
-            {user.role === "user_pr" && (
+            {(user.role === "staff" || user.role === "user_pr") && (
               <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold border border-slate-200/60">
                 <button
                   type="button"
@@ -493,7 +506,7 @@ export default function LiffPage() {
             {/* ตรรกะคัดกรองงานตามแท็บ */}
             {(() => {
               const displayedTasks =
-                user.role === "user_pr"
+                user.role === "staff" || user.role === "user_pr"
                   ? activeTab === "my"
                     ? tasks.filter((t) => t.user_id === user.id)
                     : tasks
@@ -648,6 +661,12 @@ export default function LiffPage() {
                         <span className="flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-rose-500" /> กิจกรรม
                         </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-600" /> การเรียน
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-red-600" /> ด่วน
+                        </span>
                       </div>
                     </div>
 
@@ -710,7 +729,7 @@ export default function LiffPage() {
                             </div>
 
                             {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_pr) */}
-                            {user.role === "user_pr" && (
+                            {(user.role === "staff" || user.role === "user_pr") && (
                               <div className="mt-2 pt-2 border-t border-slate-100 flex justify-end">
                                 {task.user_id === user.id ? (
                                   <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
@@ -803,7 +822,7 @@ export default function LiffPage() {
                           </div>
 
                           {/* ปุ่มสำหรับกดรับงาน (เฉพาะบทบาท Staff / user_pr) */}
-                          {user.role === "user_pr" && (
+                          {(user.role === "staff" || user.role === "user_pr") && (
                             <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
                               {task.user_id === user.id ? (
                                 <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">

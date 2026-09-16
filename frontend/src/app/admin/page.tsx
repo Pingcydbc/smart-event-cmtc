@@ -391,9 +391,10 @@ export default function AdminDashboard() {
           <div>
             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">ระดับสิทธิ์ (Role)</label>
             <select id="swal-edit-role" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-red-500">
-              <option value="user_n" ${currentRole === "user_n" ? "selected" : ""}>USER_N (Normal User / ผู้ใช้ทั่วไป)</option>
-              <option value="user_pr" ${currentRole === "user_pr" ? "selected" : ""}>USER_PR (Staff / ผู้ปฏิบัติงาน)</option>
-              <option value="admin" ${currentRole === "admin" ? "selected" : ""}>ADMIN (ผู้ดูแลระบบ)</option>
+              <option value="admin" ${currentRole === "admin" ? "selected" : ""}>👑 ADMIN (ผู้ดูแลระบบ)</option>
+              <option value="pr" ${currentRole === "pr" || currentRole === "user_pr" ? "selected" : ""}>📢 PR (ฝ่ายประชาสัมพันธ์)</option>
+              <option value="staff" ${currentRole === "staff" ? "selected" : ""}>👤 STAFF (เจ้าหน้าที่ผู้ปฏิบัติงาน)</option>
+              <option value="user_n" ${currentRole === "user_n" ? "selected" : ""}>👥 USER_N (Normal User / ผู้ใช้ทั่วไป)</option>
             </select>
           </div>
         </div>
@@ -812,13 +813,31 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <span
-                              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${user.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}
-                            >
-                              {user.role === "admin"
-                                ? "👑 Administrator"
-                                : `👤 ${user.role.toUpperCase()}`}
-                            </span>
+                            {user.role === "admin" && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                                👑 Administrator
+                              </span>
+                            )}
+                            {(user.role === "pr" || user.role === "user_pr") && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700">
+                                📢 PR (ประชาสัมพันธ์)
+                              </span>
+                            )}
+                            {user.role === "staff" && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                👤 Staff (เจ้าหน้าที่)
+                              </span>
+                            )}
+                            {user.role === "user_n" && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                👥 Normal User
+                              </span>
+                            )}
+                            {!["admin", "pr", "user_pr", "staff", "user_n"].includes(user.role) && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                {user.role?.toUpperCase()}
+                              </span>
+                            )}
                             <button
                               onClick={() => handleEditRole(user.id, user.name, user.role)}
                               className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"

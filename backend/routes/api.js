@@ -104,6 +104,12 @@ function createFlexNotification(
   } else if (category === "กิจกรรม") {
     themeColor = "#E11D48"; // Rose
     themeBg = "#FFF1F2";
+  } else if (category === "การเรียนการสอน") {
+    themeColor = "#2563EB"; // Blue
+    themeBg = "#EFF6FF";
+  } else if (category === "ด่วน" || category === "ด่วนที่สุด") {
+    themeColor = "#E11D48"; // Rose/Red
+    themeBg = "#FFF1F2";
   }
 
   // โครงสร้าง Flex Message ดีไซน์ Premium
@@ -498,7 +504,8 @@ router.get("/tasks", authenticateToken, async (req, res) => {
 
   try {
     let result;
-    if (userRole === "admin" || userRole === "user_pr") {
+    // แสดงกิจกรรมรวมขององค์กรสำหรับปฏิทินและแดชบอร์ด
+    if (showAll === "true" || !req.query.onlyMine || userRole === "admin" || userRole === "pr" || userRole === "user_pr") {
       result = await query(`
         SELECT tasks.*, users.name as creator_name 
         FROM tasks 
@@ -919,7 +926,7 @@ router.put(
     const { id } = req.params;
     const { role } = req.body;
 
-    if (!role || !["admin", "staff", "user_pr", "user_n"].includes(role)) {
+    if (!role || !["admin", "pr", "user_pr", "staff", "user_n"].includes(role)) {
       return res.status(400).json({ message: "ระดับสิทธิ์ไม่ถูกต้อง" });
     }
 
@@ -1323,29 +1330,29 @@ router.get("/liff/login-by-line", async (req, res) => {
   }
 });
 
-// 1. ตรวจสอบสิทธิ์ Admin จาก LINE User ID
+// 1. ตรวจสอบสิทธิ์ Admin / PR จาก LINE User ID
 router.get("/liff/verify-admin", async (req, res) => {
   const { lineUserId } = req.query;
   if (!lineUserId) {
     return res.status(400).json({ isAdmin: false, message: "กรุณาระบุ LINE User ID" });
   }
   try {
-    const result = await query("SELECT id, name, role FROM users WHERE line_user_id = $1 AND role = 'admin'", [lineUserId]);
+    const result = await query("SELECT id, name, role FROM users WHERE line_user_id = $1 AND role IN ('admin', 'pr', 'user_pr')", [lineUserId]);
     if (result.rows.length > 0) {
       return res.json({ isAdmin: true, user: result.rows[0] });
     }
-    return res.json({ isAdmin: false, message: "สิทธิ์การเข้าถึงถูกปฏิเสธ: เฉพาะผู้ดูแลระบบที่เชื่อมต่อบัญชีแล้วเท่านั้น" });
+    return res.json({ isAdmin: false, message: "สิทธิ์การเข้าถึงถูกปฏิเสธ: เฉพาะผู้ดูแลระบบและฝ่ายประชาสัมพันธ์ที่เชื่อมต่อบัญชีแล้วเท่านั้น" });
   } catch (error) {
     res.status(500).json({ isAdmin: false, message: "เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์" });
   }
 });
 
-// 2. ดึงรายชื่อสมาชิกสำหรับหน้ารายการ LIFF (ต้องยืนยันตัวตนแอดมิน)
+// 2. ดึงรายชื่อสมาชิกสำหรับหน้ารายการ LIFF (ต้องยืนยันตัวตนแอดมินหรือ PR)
 router.get("/liff/users", async (req, res) => {
   const { adminLineUserId } = req.query;
   try {
-    // ตรวจสอบว่าคนขอดึงข้อมูลคือ admin จริงไหม
-    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1 AND role = 'admin'", [adminLineUserId]);
+    // ตรวจสอบว่าคนขอดึงข้อมูลคือ admin หรือ pr จริงไหม
+    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1 AND role IN ('admin', 'pr', 'user_pr')", [adminLineUserId]);
     if (adminCheck.rows.length === 0) {
       return res.status(403).json({ message: "ปฏิเสธการเข้าถึง: สิทธิ์ไม่ถูกต้อง" });
     }
@@ -1357,7 +1364,7 @@ router.get("/liff/users", async (req, res) => {
   }
 });
 
-// 3. มอบหมายงานใหม่ผ่าน LIFF (ต้องยืนยันตัวตนแอดมิน)
+// 3. มอบหมายงานใหม่ผ่าน LIFF (ต้องยืนยันตัวตนแอดมินหรือ PR)
 router.post("/liff/assign", async (req, res) => {
   const { adminLineUserId, taskId, newUserId } = req.body;
 
@@ -1366,8 +1373,8 @@ router.post("/liff/assign", async (req, res) => {
   }
 
   try {
-    // 1. ตรวจสอบสิทธิ์แอดมินคนกด
-    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1 AND role = 'admin'", [adminLineUserId]);
+    // 1. ตรวจสอบสิทธิ์แอดมินหรือ PR คนกด
+    const adminCheck = await query("SELECT role FROM users WHERE line_user_id = $1 AND role IN ('admin', 'pr', 'user_pr')", [adminLineUserId]);
     if (adminCheck.rows.length === 0) {
       return res.status(403).json({ message: "ปฏิเสธการเข้าถึง" });
     }

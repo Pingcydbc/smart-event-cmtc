@@ -492,8 +492,29 @@ export default function DashboardPage() {
         return "bg-sky-500 text-white";
       case "กิจกรรม":
         return "bg-rose-500 text-white";
+      case "การเรียนการสอน":
+        return "bg-blue-600 text-white";
+      case "ด่วน":
+      case "ด่วนที่สุด":
+        return "bg-red-600 text-white";
       default:
         return "bg-gray-500 text-white";
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "admin":
+        return "👑 Administrator (ผู้ดูแลระบบ)";
+      case "pr":
+      case "user_pr":
+        return "📢 PR (ฝ่ายประชาสัมพันธ์)";
+      case "staff":
+        return "👤 Staff (เจ้าหน้าที่ผู้ปฏิบัติงาน)";
+      case "user_n":
+        return "👥 Normal User (สมาชิกทั่วไป)";
+      default:
+        return role ? role.toUpperCase() : "MEMBER";
     }
   };
 
@@ -578,7 +599,7 @@ export default function DashboardPage() {
             <p className="text-xs text-gray-400 font-medium mt-0.5 flex flex-wrap items-center gap-2">
               ระดับสิทธิ์ใช้งานปัจจุบันของคุณ:{" "}
               <span className="font-bold text-red-600 uppercase bg-red-50 px-2 py-0.5 rounded text-[11px]">
-                {currentUserRole}
+                {getRoleLabel(currentUserRole)}
               </span>
               <span className="text-gray-300">|</span>
               {lineUserId ? (
